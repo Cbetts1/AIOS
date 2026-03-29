@@ -98,7 +98,7 @@ class LocalInference:
                 parts = line.split()
                 if parts:
                     return parts[0]
-        except Exception:  # noqa: BLE001
+        except (subprocess.SubprocessError, OSError, IndexError):
             pass
         return None
 

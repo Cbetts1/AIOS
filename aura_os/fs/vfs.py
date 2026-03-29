@@ -44,6 +44,15 @@ class VirtualFS:
             raise PermissionError(
                 f"Path '{path}' resolves outside the VFS sandbox ({self._base})."
             )
+        # Additional check using commonpath for robustness
+        try:
+            common = os.path.commonpath([self._base, candidate])
+        except ValueError:
+            common = ""
+        if common != self._base:
+            raise PermissionError(
+                f"Path '{path}' resolves outside the VFS sandbox ({self._base})."
+            )
         return candidate
 
     # ------------------------------------------------------------------

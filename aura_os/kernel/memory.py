@@ -100,7 +100,7 @@ class MemoryTracker:
             else:
                 rss = usage.ru_maxrss * 1024
             return {"rss": rss, "pid": pid}
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError, ImportError):
             pass
 
         return {"rss": 0, "pid": pid}

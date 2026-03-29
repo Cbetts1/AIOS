@@ -86,7 +86,14 @@ class PackageManager:
         install_cmd = manifest.get("install_cmd")
         if install_cmd:
             print(f"[pkg] Running install command for '{name}'...")
-            result = subprocess.run(install_cmd, shell=True, text=True)
+            # Use shlex.split to avoid shell=True and reduce injection risk
+            import shlex
+            try:
+                cmd_list = shlex.split(install_cmd)
+            except ValueError as exc:
+                print(f"[pkg] Invalid install_cmd for '{name}': {exc}")
+                return False
+            result = subprocess.run(cmd_list, text=True)
             if result.returncode != 0:
                 print(f"[pkg] Install command failed for '{name}'.")
                 return False

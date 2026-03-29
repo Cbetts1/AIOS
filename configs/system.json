@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "env_type": "auto",
+  "storage_root": "~/.aura",
+  "web_ui_port": 7070,
+  "web_ui_host": "127.0.0.1",
+  "ai_backend": "auto",
+  "log_level": "info"
+}

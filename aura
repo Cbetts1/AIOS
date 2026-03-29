@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# aura — AURA OS entry point
+#
+# Sets AURA_HOME (defaulting to ~/.aura) and delegates to the Python module.
+
+set -e
+
+# Determine AURA_HOME
+if [ -z "${AURA_HOME}" ]; then
+    export AURA_HOME="${HOME}/.aura"
+fi
+
+# Locate python3
+PYTHON=""
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        PYTHON="$candidate"
+        break
+    fi
+done
+
+if [ -z "$PYTHON" ]; then
+    echo "[aura] Error: python3 not found in PATH." >&2
+    exit 1
+fi
+
+# Prefer the installed library copy if it exists
+LIB_DIR="${AURA_HOME}/lib"
+if [ -d "${LIB_DIR}" ]; then
+    export PYTHONPATH="${LIB_DIR}:${PYTHONPATH:-}"
+fi
+
+exec "$PYTHON" -m aura_os.main "$@"

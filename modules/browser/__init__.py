@@ -157,7 +157,7 @@ class BrowserModule:
     # ------------------------------------------------------------------ #
 
     def start_terminal(self):
-        """Render a colourful terminal-based status dashboard."""
+        """Render a colorful terminal-based status dashboard."""
         from aura_os.shell.colors import (
             bold, bright_cyan, cyan, dim, green, header, yellow,
             progress_bar,

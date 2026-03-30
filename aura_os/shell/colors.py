@@ -9,7 +9,7 @@ import os
 import sys
 
 # ──────────────────────────────────────────────────────────────────────
-# Colour support detection
+# Color support detection
 # ──────────────────────────────────────────────────────────────────────
 
 def _supports_color() -> bool:
@@ -57,7 +57,7 @@ _CODES = {
 
 
 def _wrap(code_name: str, text: str) -> str:
-    """Wrap *text* in the ANSI escape for *code_name*, if colours are enabled."""
+    """Wrap *text* in the ANSI escape for *code_name*, if colors are enabled."""
     if not _COLOR_ENABLED:
         return text
     return f"{_CODES[code_name]}{text}{_CODES['reset']}"
@@ -150,7 +150,7 @@ def muted(text: str) -> str:
 # ──────────────────────────────────────────────────────────────────────
 
 def progress_bar(percent: float, width: int = 20) -> str:
-    """Return a coloured progress bar string.
+    """Return a colored progress bar string.
 
     Example: ``▓▓▓▓▓▓▓▓░░░░░░░░░░░░  40%``
     """

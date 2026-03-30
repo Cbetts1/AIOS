@@ -27,7 +27,7 @@ class EnvCommand:
 
     @staticmethod
     def _print_human(info: dict):
-        """Render *info* as a human-readable, coloured table."""
+        """Render *info* as a human-readable, colored table."""
         sep = dim("─" * 50)
         print(sep)
         print(f"  {header('⬡ AURA OS')} — {bold('Environment Info')}")

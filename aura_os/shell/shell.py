@@ -41,7 +41,7 @@ def _run_prompt_toolkit_shell(parser, router, eal):
     history = FileHistory(history_path)
     platform = getattr(eal, "platform", "aura")
 
-    # Build a coloured prompt
+    # Build a colored prompt
     prompt_text = ANSI(
         f"{dim('[')}{ cyan(platform) }{dim(']')} {bold(bright_cyan('aura'))} {dim('❯')} "
     )

@@ -60,7 +60,7 @@ def _process_count() -> int:
 
 
 def _render(eal) -> str:
-    """Build the sys-status string with colour."""
+    """Build the sys-status string with color."""
     tracker = MemoryTracker()
     mem = tracker.get_system_memory()
     disk = _disk_usage()

@@ -1,6 +1,6 @@
 """Output formatters for AURA OS command results.
 
-Provides helpers to produce rich, coloured terminal output for tables,
+Provides helpers to produce rich, colored terminal output for tables,
 key-value panels, and status information.  Falls back to plain text
 when colour is unavailable.
 """
@@ -22,7 +22,7 @@ def table(
     rows: Sequence[Sequence[str]],
     col_widths: Optional[Sequence[int]] = None,
 ) -> str:
-    """Format a simple table with coloured headers.
+    """Format a simple table with colored headers.
 
     >>> print(table(["Name", "Value"], [["a", "1"], ["b", "2"]]))
     """
@@ -60,7 +60,7 @@ def kv_panel(
     items: Sequence[Tuple[str, str]],
     label_width: int = 18,
 ) -> str:
-    """Render a coloured key-value panel.
+    """Render a colored key-value panel.
 
     Example::
 
@@ -91,7 +91,7 @@ def kv_panel(
 # ──────────────────────────────────────────────────────────────────────
 
 def section(title: str, width: int = 50) -> str:
-    """Return a coloured section separator."""
+    """Return a colored section separator."""
     line = dim("─" * width)
     return f"  {line}\n  {header(title)}\n  {line}"
 
@@ -101,7 +101,7 @@ def section(title: str, width: int = 50) -> str:
 # ──────────────────────────────────────────────────────────────────────
 
 def badges(items: Sequence[str], per_row: int = 4) -> str:
-    """Return items formatted as coloured badges."""
+    """Return items formatted as colored badges."""
     lines = []
     for i in range(0, len(items), per_row):
         chunk = items[i:i + per_row]

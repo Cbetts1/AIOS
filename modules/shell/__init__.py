@@ -174,7 +174,11 @@ class ShellModule:
             print("  Usage: !<command>  (e.g., !ls -la)")
             return
         try:
-            subprocess.run(cmd, shell=True)
+            tokens = shlex.split(cmd)
+            subprocess.run(tokens)
+        except ValueError:
+            # shlex.split failed (e.g. unmatched quotes) — fall back safely
+            print(f"  [shell] Could not parse command: {cmd}")
         except Exception as e:
             print(f"  [shell] Error: {e}")
 

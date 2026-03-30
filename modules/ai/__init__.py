@@ -116,13 +116,25 @@ class AIModule:
         (r"\b(git|repo|repository|commit|branch)\b",
          "Repo commands:\n  aura repo create <name>\n  aura repo list\n  aura repo status [path]"),
 
+        # Package management
+        (r"\b(install|package|pkg|apt|brew|pip|npm|remove|uninstall)\b",
+         "Package commands:\n  aura pkg install <name>  — install a package\n  aura pkg remove <name>   — remove a package\n  aura pkg search <query>  — search the catalog\n  aura pkg catalog         — browse all packages\n  aura pkg list            — list installed packages\n  aura pkg info <name>     — package details"),
+
+        # Process management
+        (r"\b(process|pid|kill|terminate|running|top|htop|ps)\b",
+         "Process commands:\n  aura ps            — list running processes\n  aura top           — top resource consumers\n  aura kill <pid>    — terminate a process\n  aura jobs          — list AURA background jobs"),
+
+        # Shell
+        (r"\b(shell|terminal|interactive|repl|prompt)\b",
+         "Start the interactive shell with: aura shell\nFeatures: tab-completion, command history, AI assist (type ?), host shell pass-through (type !)"),
+
         # System info
         (r"\b(system|os|platform|info|hardware)\b",
-         "Use 'aura sys info' for system details and 'aura sys caps' for capability flags."),
+         "Use 'aura sys info' for system details, 'aura sys caps' for capability flags, 'aura env' for full environment JSON."),
 
         # Help
         (r"\b(help|commands|usage)\b",
-         "Run 'aura help' to see all available commands."),
+         "Run 'aura help' to see all available commands, or 'aura shell' for the interactive terminal."),
 
         # Automation
         (r"\b(automat|task|workflow|schedule|cron)\b",
@@ -130,7 +142,7 @@ class AIModule:
 
         # Greeting
         (r"^(hi|hello|hey|yo)\b",
-         "Hello! I'm AURA's offline assistant. How can I help you today?"),
+         "Hello! I'm AURA's AI assistant. I'm integrated throughout the OS — ask me anything!\nTry: aura shell (interactive mode), aura pkg search <tool>, aura ps"),
     ]
 
     def _rule_query(self, prompt: str) -> str:

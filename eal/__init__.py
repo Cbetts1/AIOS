@@ -144,7 +144,10 @@ def get_adapter(env_map=None):
     if env_map.get("is_termux") or env_type == "android":
         from eal.adapters.android import AndroidAdapter
         return AndroidAdapter(env_map)
-    elif env_type in ("linux", "macos"):
+    elif env_type == "macos":
+        from eal.adapters.macos import MacOSAdapter
+        return MacOSAdapter(env_map)
+    elif env_type == "linux":
         from eal.adapters.linux import LinuxAdapter
         return LinuxAdapter(env_map)
     else:

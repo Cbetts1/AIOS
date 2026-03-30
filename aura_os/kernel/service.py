@@ -150,12 +150,16 @@ class ServiceManager:
             os.makedirs(log_dir, exist_ok=True)
             log_path = os.path.join(log_dir, f"svc_{name}.log")
             log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
-            proc = subprocess.Popen(
-                cmd_list,
-                stdout=log_fh,
-                stderr=log_fh,
-                start_new_session=True,
-            )
+            try:
+                proc = subprocess.Popen(
+                    cmd_list,
+                    stdout=log_fh,
+                    stderr=log_fh,
+                    start_new_session=True,
+                )
+            except Exception:
+                log_fh.close()
+                raise
             entry._popen = proc
             entry._log_fh = log_fh
             entry.pid = proc.pid

@@ -95,6 +95,11 @@ class TestServiceManager(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         self.sm = ServiceManager(services_dir=self.tmpdir)
 
+    def tearDown(self):
+        for svc in self.sm.list_services():
+            if svc["status"] == "running":
+                self.sm.stop(svc["name"])
+
     def test_create_service(self):
         self.sm.create("test-svc", "echo hello", description="Test service")
         services = self.sm.list_services()
@@ -163,7 +168,9 @@ class TestSyslog(unittest.TestCase):
     def setUp(self):
         from aura_os.kernel.syslog import Syslog
         Syslog.reset_instance()
-        self.tmpfile = tempfile.mktemp(suffix=".log")
+        self._tmpfile_obj = tempfile.NamedTemporaryFile(suffix=".log", delete=False)
+        self.tmpfile = self._tmpfile_obj.name
+        self._tmpfile_obj.close()
         self.syslog = Syslog(log_path=self.tmpfile)
 
     def tearDown(self):

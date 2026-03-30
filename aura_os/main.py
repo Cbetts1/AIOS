@@ -254,13 +254,13 @@ def _run_shell(eal):
                 days = int(secs // 86400)
                 hours = int((secs % 86400) // 3600)
                 mins = int((secs % 3600) // 60)
-                parts_str = []
+                uptime_parts = []
                 if days:
-                    parts_str.append(f"{days} day(s)")
+                    uptime_parts.append(f"{days} day(s)")
                 if hours:
-                    parts_str.append(f"{hours}h")
-                parts_str.append(f"{mins}m")
-                print(f"  up {', '.join(parts_str)}")
+                    uptime_parts.append(f"{hours}h")
+                uptime_parts.append(f"{mins}m")
+                print(f"  up {', '.join(uptime_parts)}")
             continue
 
         if cmd == "cat":
@@ -323,7 +323,8 @@ def _run_shell(eal):
             else:
                 target = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
                 try:
-                    open(target, "a", encoding="utf-8").close()  # noqa: SIM115
+                    from pathlib import Path as P
+                    P(target).touch()
                 except OSError as exc:
                     print(f"touch: {exc}")
             continue

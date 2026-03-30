@@ -1,12 +1,12 @@
 """``aura ps`` command handler — list processes."""
 
-import time
+from typing import Optional
 
 from aura_os.kernel.process import ProcessManager
 
 
 # Module-level singleton so all commands share one table
-_pm: ProcessManager = None
+_pm: Optional[ProcessManager] = None
 
 
 def get_process_manager() -> ProcessManager:

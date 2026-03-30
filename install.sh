@@ -1,307 +1,212 @@
 #!/usr/bin/env bash
-# ============================================================
-#  AURA OS — Master Installation Script
-#  Adaptive User-space Runtime Architecture
+# install.sh — AURA OS master installation script
 #
-#  Supported environments:
-#    • Termux on Android
-#    • Debian/Ubuntu Linux
-#    • Fedora / RHEL / CentOS
-#    • Arch Linux
-#    • macOS (Homebrew)
-#    • Any POSIX system with Python 3
-#
-#  Usage:
-#    bash install.sh [--prefix /path/to/install]
-#
-#  After installation:
-#    aura help
-# ============================================================
+# Idempotent: safe to run multiple times.
+# Supports: Linux, macOS, Android/Termux
 
-set -euo pipefail
+set -e
 
-# ── Colours ──────────────────────────────────────────────────────────────────
+##############################################################################
+# Helpers
+##############################################################################
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+NC='\033[0m'   # no colour
 
-log()  { echo -e "${CYAN}[aura]${NC} $*"; }
-ok()   { echo -e "${GREEN}[ok]${NC} $*"; }
-warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
-fail() { echo -e "${RED}[fail]${NC} $*"; exit 1; }
+info()    { printf "${CYAN}[aura]${NC}  %s\n" "$*"; }
+success() { printf "${GREEN}[aura]${NC}  %s\n" "$*"; }
+warn()    { printf "${YELLOW}[aura]${NC}  %s\n" "$*" >&2; }
+error()   { printf "${RED}[aura]${NC}  ERROR: %s\n" "$*" >&2; exit 1; }
 
-# ── Defaults ─────────────────────────────────────────────────────────────────
-AURA_REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AURA_HOME="${AURA_HOME:-$HOME/.aura}"
-INSTALL_PREFIX="${1:-}"
-if [[ "$INSTALL_PREFIX" == "--prefix" && -n "${2:-}" ]]; then
-    AURA_HOME="$2"
-fi
+##############################################################################
+# Environment detection
+##############################################################################
 
-# ── Detect Environment ────────────────────────────────────────────────────────
-detect_env() {
-    IS_TERMUX=false
-    IS_LINUX=false
-    IS_MACOS=false
-    PKG_MANAGER=""
-
-    if [[ -d "/data/data/com.termux" ]] || [[ "${PREFIX:-}" == *termux* ]]; then
-        IS_TERMUX=true
-        IS_LINUX=true
-        if command -v pkg &>/dev/null; then PKG_MANAGER="pkg"; fi
-    elif [[ "$(uname -s)" == "Linux" ]]; then
-        IS_LINUX=true
-        if command -v apt-get &>/dev/null; then PKG_MANAGER="apt-get"
-        elif command -v dnf &>/dev/null; then  PKG_MANAGER="dnf"
-        elif command -v yum &>/dev/null; then  PKG_MANAGER="yum"
-        elif command -v pacman &>/dev/null; then PKG_MANAGER="pacman"
-        elif command -v zypper &>/dev/null; then PKG_MANAGER="zypper"
-        fi
-    elif [[ "$(uname -s)" == "Darwin" ]]; then
-        IS_MACOS=true
-        if command -v brew &>/dev/null; then PKG_MANAGER="brew"; fi
-    fi
-
-    log "Detected environment: $(uname -s) | Termux=$IS_TERMUX | PM=$PKG_MANAGER"
-}
-
-# ── Python detection ─────────────────────────────────────────────────────────
-find_python() {
-    for py in python3 python; do
-        if command -v "$py" &>/dev/null; then
-            PYTHON="$py"
-            PY_VER="$($py --version 2>&1)"
-            ok "Found Python: $PYTHON ($PY_VER)"
-            return 0
-        fi
-    done
-    return 1
-}
-
-# ── Install system packages ───────────────────────────────────────────────────
-install_system_packages() {
-    if $IS_TERMUX; then
-        log "Installing Termux packages …"
-        pkg install -y python git curl wget 2>/dev/null || warn "Some packages may have failed"
-    elif [[ -n "$PKG_MANAGER" ]]; then
-        log "Installing system packages via $PKG_MANAGER …"
-        case "$PKG_MANAGER" in
-            apt-get|apt)
-                sudo apt-get update -qq 2>/dev/null || true
-                sudo apt-get install -y python3 python3-pip git curl 2>/dev/null || warn "apt install had warnings"
-                ;;
-            dnf|yum)
-                sudo "$PKG_MANAGER" install -y python3 python3-pip git curl 2>/dev/null || warn "dnf/yum install had warnings"
-                ;;
-            pacman)
-                sudo pacman -Sy --noconfirm python python-pip git curl 2>/dev/null || warn "pacman install had warnings"
-                ;;
-            brew)
-                brew install python git curl 2>/dev/null || warn "brew install had warnings"
-                ;;
-        esac
+detect_platform() {
+    if [ -n "${TERMUX_VERSION}" ] || [ -d "/data/data/com.termux" ]; then
+        echo "termux"
+    elif [ -f "/system/build.prop" ]; then
+        echo "android"
+    elif [ "$(uname -s)" = "Darwin" ]; then
+        echo "macos"
     else
-        warn "No supported package manager found. Skipping system package installation."
+        echo "linux"
     fi
 }
 
-# ── Install Python packages ───────────────────────────────────────────────────
-install_python_packages() {
-    log "Installing Python packages …"
-    local pip_cmd=""
-    for p in pip3 pip "$PYTHON -m pip"; do
-        if command -v ${p%% *} &>/dev/null || $PYTHON -m pip --version &>/dev/null 2>&1; then
-            pip_cmd="$PYTHON -m pip"
+PLATFORM="$(detect_platform)"
+info "Detected platform: ${PLATFORM}"
+
+##############################################################################
+# Python check (>= 3.8)
+##############################################################################
+
+PYTHON=""
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        ver=$("$candidate" -c "import sys; print('%d%02d' % sys.version_info[:2])" 2>/dev/null || echo "0")
+        if [ "$ver" -ge 308 ] 2>/dev/null; then
+            PYTHON="$candidate"
             break
         fi
-    done
+    fi
+done
 
-    if [[ -z "$pip_cmd" ]]; then
-        warn "pip not found — skipping Python package installation"
+if [ -z "$PYTHON" ]; then
+    error "Python 3.8+ is required but was not found.
+  Linux  : sudo apt install python3  (or dnf/pacman)
+  Termux : pkg install python
+  macOS  : brew install python3"
+fi
+
+PYTHON_VERSION=$("$PYTHON" -c "import sys; print('.'.join(map(str,sys.version_info[:3])))")
+info "Using Python ${PYTHON_VERSION} at $(command -v "$PYTHON")"
+
+##############################################################################
+# Paths
+##############################################################################
+
+AURA_HOME="${AURA_HOME:-${HOME}/.aura}"
+AURA_BIN="${AURA_HOME}/bin"
+AURA_LIB="${AURA_HOME}/lib"
+AURA_DATA="${AURA_HOME}/data"
+AURA_LOGS="${AURA_HOME}/logs"
+AURA_PKG="${AURA_HOME}/pkg"
+AURA_MODELS="${AURA_HOME}/models"
+AURA_CONFIG="${AURA_HOME}/config"
+AURA_IPC="${AURA_HOME}/ipc"
+
+# Script's own directory (works even when sourced or run from another dir)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+##############################################################################
+# Create directory structure
+##############################################################################
+
+info "Creating ~/.aura directory structure…"
+for dir in "$AURA_BIN" "$AURA_LIB" "$AURA_DATA" "$AURA_LOGS" \
+           "$AURA_PKG/installed" "$AURA_MODELS" "$AURA_CONFIG" "$AURA_IPC"; do
+    mkdir -p "$dir"
+done
+success "Directories created."
+
+##############################################################################
+# Copy library
+##############################################################################
+
+if [ -d "${SCRIPT_DIR}/aura_os" ]; then
+    info "Installing aura_os library to ${AURA_LIB}/aura_os…"
+    rm -rf "${AURA_LIB}/aura_os"
+    cp -r "${SCRIPT_DIR}/aura_os" "${AURA_LIB}/aura_os"
+    success "Library installed."
+else
+    warn "aura_os/ source directory not found next to install.sh — skipping library copy."
+fi
+
+##############################################################################
+# Install entry script
+##############################################################################
+
+ENTRY_SCRIPT="${SCRIPT_DIR}/aura"
+if [ -f "$ENTRY_SCRIPT" ]; then
+    chmod +x "$ENTRY_SCRIPT"
+    WRAPPER="${AURA_BIN}/aura"
+
+    # Create a small wrapper that points to the canonical entry script
+    cat > "$WRAPPER" <<WRAPPER_EOF
+#!/usr/bin/env bash
+export AURA_HOME="${AURA_HOME}"
+export PYTHONPATH="${AURA_LIB}:\${PYTHONPATH:-}"
+exec "${PYTHON}" -m aura_os.main "\$@"
+WRAPPER_EOF
+    chmod +x "$WRAPPER"
+    success "Entry script installed at ${WRAPPER}."
+else
+    warn "'aura' entry script not found — skipping."
+fi
+
+##############################################################################
+# Default config
+##############################################################################
+
+CONFIG_FILE="${AURA_CONFIG}/settings.json"
+if [ ! -f "$CONFIG_FILE" ]; then
+    info "Writing default config to ${CONFIG_FILE}…"
+    cat > "$CONFIG_FILE" <<'CONFIG_EOF'
+{
+  "version": "0.1.0",
+  "log_level": "INFO",
+  "ai": {
+    "default_model": "auto",
+    "max_tokens": 512,
+    "runtime": "auto"
+  },
+  "shell": {
+    "prompt": "aura> ",
+    "history_file": "~/.aura/data/.history"
+  },
+  "pkg": {
+    "registry_url": null,
+    "install_dir": "~/.aura/pkg/installed"
+  },
+  "fs": {
+    "data_dir": "~/.aura/data",
+    "max_vfs_size_mb": 1024
+  }
+}
+CONFIG_EOF
+    success "Default config written."
+else
+    info "Config already exists at ${CONFIG_FILE} — skipping."
+fi
+
+##############################################################################
+# PATH configuration
+##############################################################################
+
+add_to_path() {
+    local profile_file="$1"
+    local path_line='export PATH="${HOME}/.aura/bin:${PATH}"'
+
+    if [ -f "$profile_file" ] && grep -q 'aura/bin' "$profile_file" 2>/dev/null; then
+        info "PATH entry already present in ${profile_file}."
         return
     fi
 
-    $pip_cmd install --upgrade pip --quiet 2>/dev/null || true
-
-    # Core requirements — flask is optional (used for web UI)
-    local packages="flask"
-    for pkg in $packages; do
-        if $pip_cmd install "$pkg" --quiet 2>/dev/null; then
-            ok "  + $pkg"
-        else
-            warn "  Could not install $pkg (non-fatal — fallback will be used)"
-        fi
-    done
+    {
+        echo ""
+        echo "# AURA OS"
+        echo "${path_line}"
+    } >> "$profile_file"
+    success "Added ~/.aura/bin to PATH in ${profile_file}."
 }
 
-# ── Create directory structure ────────────────────────────────────────────────
-create_dirs() {
-    log "Creating AURA directory structure at $AURA_HOME …"
-    local dirs=(
-        "$AURA_HOME/configs"
-        "$AURA_HOME/logs"
-        "$AURA_HOME/models"
-        "$AURA_HOME/tasks"
-        "$AURA_HOME/repos"
-        "$AURA_HOME/ui/templates"
-        "$AURA_HOME/data"
-        "$AURA_HOME/boot"
-    )
-    for d in "${dirs[@]}"; do
-        mkdir -p "$d"
-    done
-    ok "Directories created."
-}
+# Pick the right shell profile
+if [ "${PLATFORM}" = "termux" ]; then
+    PROFILE="${HOME}/.bashrc"
+elif [ -f "${HOME}/.bashrc" ]; then
+    PROFILE="${HOME}/.bashrc"
+elif [ -f "${HOME}/.bash_profile" ]; then
+    PROFILE="${HOME}/.bash_profile"
+else
+    PROFILE="${HOME}/.profile"
+fi
 
-# ── Write default config ──────────────────────────────────────────────────────
-write_config() {
-    local cfg="$AURA_HOME/configs/system.json"
-    if [[ ! -f "$cfg" ]]; then
-        cat > "$cfg" <<EOF
-{
-  "version": "1.0.0",
-  "env_type": "auto",
-  "storage_root": "$AURA_HOME",
-  "web_ui_port": 7070,
-  "web_ui_host": "127.0.0.1",
-  "ai_backend": "auto",
-  "log_level": "info"
-}
-EOF
-        ok "Config written: $cfg"
-    else
-        ok "Config already exists: $cfg"
-    fi
-}
+add_to_path "$PROFILE"
 
-# ── Set up environment variables ──────────────────────────────────────────────
-setup_env_vars() {
-    log "Setting up environment variables …"
+##############################################################################
+# Done
+##############################################################################
 
-    local profile_file=""
-    if [[ -f "$HOME/.bashrc" ]]; then
-        profile_file="$HOME/.bashrc"
-    elif [[ -f "$HOME/.bash_profile" ]]; then
-        profile_file="$HOME/.bash_profile"
-    elif [[ -f "$HOME/.zshrc" ]]; then
-        profile_file="$HOME/.zshrc"
-    elif [[ -f "$HOME/.profile" ]]; then
-        profile_file="$HOME/.profile"
-    fi
-
-    local export_line="export AURA_HOME=\"$AURA_HOME\""
-    local path_line="export PATH=\"$AURA_REPO_DIR:\$PATH\""
-
-    if [[ -n "$profile_file" ]]; then
-        # Only add if not already present
-        if ! grep -q "AURA_HOME" "$profile_file" 2>/dev/null; then
-            echo "" >> "$profile_file"
-            echo "# AURA OS" >> "$profile_file"
-            echo "$export_line" >> "$profile_file"
-            echo "$path_line" >> "$profile_file"
-            ok "Environment variables added to $profile_file"
-        else
-            ok "Environment variables already in $profile_file"
-        fi
-    else
-        warn "Could not find shell profile file. Add these manually:"
-        echo "  $export_line"
-        echo "  $path_line"
-    fi
-
-    # Export for current session
-    export AURA_HOME="$AURA_HOME"
-    export PATH="$AURA_REPO_DIR:$PATH"
-}
-
-# ── Make scripts executable ───────────────────────────────────────────────────
-set_permissions() {
-    log "Setting file permissions …"
-    chmod +x "$AURA_REPO_DIR/aura" 2>/dev/null || true
-    find "$AURA_REPO_DIR/scripts" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
-    ok "Permissions set."
-}
-
-# ── Optional: Termux:Boot setup ───────────────────────────────────────────────
-setup_termux_boot() {
-    if $IS_TERMUX; then
-        log "Setting up Termux:Boot …"
-        local boot_dir="$HOME/.termux/boot"
-        mkdir -p "$boot_dir"
-        cat > "$boot_dir/aura_start.sh" <<EOF
-#!/data/data/com.termux/files/usr/bin/bash
-export AURA_HOME="$AURA_HOME"
-export PATH="$AURA_REPO_DIR:\$PATH"
-# Uncomment below to auto-start web UI on boot:
-# aura ui web &
-EOF
-        chmod +x "$boot_dir/aura_start.sh"
-        ok "Termux:Boot script installed: $boot_dir/aura_start.sh"
-    fi
-}
-
-# ── Run bootstrap ─────────────────────────────────────────────────────────────
-run_bootstrap() {
-    log "Running AURA bootstrap …"
-    AURA_HOME="$AURA_HOME" "$PYTHON" "$AURA_REPO_DIR/boot/startup.py" || \
-        warn "Bootstrap completed with warnings."
-}
-
-# ── Final summary ─────────────────────────────────────────────────────────────
-print_summary() {
-    echo ""
-    echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD}  AURA OS — Installation Complete${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo "  Installation directory : $AURA_REPO_DIR"
-    echo "  AURA home              : $AURA_HOME"
-    echo ""
-    echo "  To start AURA in a new terminal:"
-    echo ""
-    echo -e "    ${CYAN}source ~/.bashrc${NC}          (reload shell)"
-    echo -e "    ${CYAN}aura help${NC}                 (show commands)"
-    echo -e "    ${CYAN}aura sys info${NC}             (system info)"
-    echo -e "    ${CYAN}aura ui${NC}                   (launch dashboard)"
-    echo ""
-    echo -e "  Or run directly (current session):"
-    echo ""
-    echo -e "    ${CYAN}$AURA_REPO_DIR/aura help${NC}"
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-}
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-main() {
-    echo ""
-    echo -e "${BOLD}${CYAN}  ⬡ AURA OS — Adaptive User-space Runtime Architecture${NC}"
-    echo -e "${CYAN}  Installation starting …${NC}"
-    echo ""
-
-    detect_env
-
-    # Python is required
-    if ! find_python; then
-        install_system_packages
-        if ! find_python; then
-            fail "Python 3 not found and could not be installed. Please install Python 3 manually."
-        fi
-    else
-        install_system_packages
-    fi
-
-    install_python_packages
-    create_dirs
-    write_config
-    setup_env_vars
-    set_permissions
-    setup_termux_boot
-    run_bootstrap
-    print_summary
-}
-
-main "$@"
+echo ""
+success "AURA OS installation complete!"
+echo ""
+info "To start using aura right now, run:"
+printf "    ${CYAN}export PATH=\"\${HOME}/.aura/bin:\${PATH}\"${NC}\n"
+printf "    ${CYAN}aura --help${NC}\n"
+echo ""
+info "Or start a new shell session for PATH changes to take effect."
+echo ""

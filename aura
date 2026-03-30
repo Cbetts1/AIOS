@@ -1,32 +1,33 @@
-#!/usr/bin/env python3
-"""
-aura — AURA OS Command-Line Interface
-Entry point for all AURA commands.
+#!/usr/bin/env bash
+# aura — AURA OS entry point
+#
+# Sets AURA_HOME (defaulting to ~/.aura) and delegates to the Python module.
 
-Usage:
-    aura <command> [args...]
-    aura help
-"""
+set -e
 
-import os
-import sys
-from pathlib import Path
+# Determine AURA_HOME
+if [ -z "${AURA_HOME}" ]; then
+    export AURA_HOME="${HOME}/.aura"
+fi
 
-# ── Ensure the AIOS root is on sys.path so imports work regardless of CWD ──
-_ROOT = Path(__file__).resolve().parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
+# Locate python3
+PYTHON=""
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        PYTHON="$candidate"
+        break
+    fi
+done
 
-# ── Set AURA_HOME if not already set ────────────────────────────────────────
-if "AURA_HOME" not in os.environ:
-    os.environ["AURA_HOME"] = str(Path.home() / ".aura")
+if [ -z "$PYTHON" ]; then
+    echo "[aura] Error: python3 not found in PATH." >&2
+    exit 1
+fi
 
+# Prefer the installed library copy if it exists
+LIB_DIR="${AURA_HOME}/lib"
+if [ -d "${LIB_DIR}" ]; then
+    export PYTHONPATH="${LIB_DIR}:${PYTHONPATH:-}"
+fi
 
-def main():
-    from core.engine import CommandEngine
-    engine = CommandEngine()
-    engine.run(sys.argv[1:])
-
-
-if __name__ == "__main__":
-    main()
+exec "$PYTHON" -m aura_os.main "$@"

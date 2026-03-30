@@ -5,6 +5,7 @@ import shutil
 from typing import Optional
 
 from .model_manager import ModelManager
+from .knowledge import build_system_prompt, lookup as knowledge_lookup
 
 
 _INSTALL_HINT = (
@@ -35,17 +36,37 @@ class LocalInference:
     def query(self, prompt: str, model: Optional[str] = None, max_tokens: int = 512) -> str:
         """Run *prompt* through the best available local runtime.
 
-        Returns the model response as a string, or an instructional message
-        if no runtime is available.
+        First checks the built-in knowledge base for a direct answer.
+        If a local AI runtime is available, the prompt is enriched with
+        AURA system context so the model can give informed answers.
+        Falls back to an instructional message when no runtime exists.
         """
+        # Try built-in knowledge base first for fast, offline answers
+        kb_answer = knowledge_lookup(prompt)
+
         runtime = self._mm.get_active_runtime()
 
         if runtime == "ollama":
-            return self._query_ollama(prompt, model, max_tokens)
+            enriched = self._enrich_prompt(prompt)
+            return self._query_ollama(enriched, model, max_tokens)
         if runtime == "llama.cpp":
-            return self._query_llama_cpp(prompt, model, max_tokens)
+            enriched = self._enrich_prompt(prompt)
+            return self._query_llama_cpp(enriched, model, max_tokens)
+
+        # No LLM available — return knowledge-base answer or install hint
+        if kb_answer:
+            return kb_answer
 
         return _INSTALL_HINT
+
+    @staticmethod
+    def _enrich_prompt(user_prompt: str) -> str:
+        """Prepend system context to *user_prompt* for richer LLM answers."""
+        system = build_system_prompt()
+        return (
+            f"[SYSTEM]\n{system}\n\n"
+            f"[USER]\n{user_prompt}"
+        )
 
     # ------------------------------------------------------------------
     # Runtime-specific backends

@@ -1,13 +1,16 @@
 """
 AI Module — Offline-First Assistant
 Tries to use a local GGUF model via llama-cpp-python if available,
-otherwise falls back to a deterministic rule-based assistant.
+otherwise falls back to a deterministic rule-based assistant enhanced
+with a comprehensive knowledge base.
 """
 
 import re
 import json
 import time
 from pathlib import Path
+
+from aura_os.ai.knowledge import build_system_prompt, lookup as knowledge_lookup
 
 
 class AIModule:
@@ -86,8 +89,13 @@ class AIModule:
 
     def _llm_query(self, prompt: str) -> str:
         try:
+            system_ctx = build_system_prompt()
+            enriched_prompt = (
+                f"<|system|>\n{system_ctx}\n"
+                f"<|user|>\n{prompt}\n<|assistant|>\n"
+            )
             out = self._llm(
-                f"<|user|>\n{prompt}\n<|assistant|>\n",
+                enriched_prompt,
                 max_tokens=512,
                 stop=["<|user|>", "</s>"],
             )
@@ -134,6 +142,12 @@ class AIModule:
     ]
 
     def _rule_query(self, prompt: str) -> str:
+        # Try the comprehensive knowledge base first
+        kb_answer = knowledge_lookup(prompt)
+        if kb_answer:
+            return kb_answer
+
+        # Fall back to regex-based rules
         p = prompt.lower()
         for pattern, response in self._RULES:
             if re.search(pattern, p):

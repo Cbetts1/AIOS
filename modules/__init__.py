@@ -38,4 +38,13 @@ def available_modules(env_map: dict) -> list:
     # Automation module: always available
     modules.append("automation")
 
+    # Package management: always available (adapts to host PM)
+    modules.append("pkg")
+
+    # Process management: always available
+    modules.append("process")
+
+    # Interactive shell: always available
+    modules.append("shell")
+
     return modules

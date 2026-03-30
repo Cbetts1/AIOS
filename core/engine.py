@@ -83,6 +83,12 @@ class CommandEngine:
         r.register("ui", self._cmd_ui, "Launch web or terminal UI", "aura ui [web|term]")
         r.register("env", self._cmd_env, "Show detected environment", "aura env")
         r.register("reload", self._cmd_reload, "Reload environment detection", "aura reload")
+        r.register("pkg", self._cmd_pkg, "Package management", "aura pkg <install|remove|list|search|catalog|info> [name]")
+        r.register("ps", self._cmd_ps, "List running processes", "aura ps")
+        r.register("kill", self._cmd_kill, "Terminate a process by PID", "aura kill <pid>")
+        r.register("top", self._cmd_top, "Top resource-consuming processes", "aura top")
+        r.register("jobs", self._cmd_jobs, "List AURA background jobs", "aura jobs")
+        r.register("shell", self._cmd_shell, "Start interactive AURA shell", "aura shell")
 
     # ------------------------------------------------------------------ #
     # Built-in handlers
@@ -286,3 +292,100 @@ class CommandEngine:
         self.env_map = load_env_map()
         self.adapter = get_adapter(self.env_map)
         print("[aura] Environment reloaded.")
+
+    # ------------------------------------------------------------------ #
+    # Package management
+    # ------------------------------------------------------------------ #
+
+    def _cmd_pkg(self, args, ctx):
+        if not args:
+            print("[aura pkg] Usage: aura pkg <install|remove|list|search|catalog|info> [name]")
+            return
+
+        sub = args[0].lower()
+        rest = args[1:]
+
+        try:
+            from modules.pkg import PkgModule
+            pkg = PkgModule(ctx["env"], ctx["adapter"])
+            if sub == "install":
+                if not rest:
+                    print("[aura pkg] Usage: aura pkg install <package>")
+                    return
+                pkg.install(rest[0])
+            elif sub == "remove":
+                if not rest:
+                    print("[aura pkg] Usage: aura pkg remove <package>")
+                    return
+                pkg.remove(rest[0])
+            elif sub == "list":
+                pkg.list_installed()
+            elif sub == "search":
+                query = rest[0] if rest else ""
+                pkg.search(query)
+            elif sub == "catalog":
+                pkg.catalog()
+            elif sub == "info":
+                if not rest:
+                    print("[aura pkg] Usage: aura pkg info <package>")
+                    return
+                pkg.info(rest[0])
+            else:
+                print(f"[aura pkg] Unknown sub-command '{sub}'")
+        except Exception as e:
+            print(f"[aura pkg] Error: {e}")
+
+    # ------------------------------------------------------------------ #
+    # Process management
+    # ------------------------------------------------------------------ #
+
+    def _cmd_ps(self, args, ctx):
+        try:
+            from modules.process import ProcessModule
+            pm = ProcessModule(ctx["env"], ctx["adapter"])
+            pm.ps()
+        except Exception as e:
+            print(f"[aura ps] Error: {e}")
+
+    def _cmd_kill(self, args, ctx):
+        if not args:
+            print("[aura kill] Usage: aura kill <pid> [signal]")
+            return
+        try:
+            pid = int(args[0])
+            sig = int(args[1]) if len(args) > 1 else 15
+            from modules.process import ProcessModule
+            pm = ProcessModule(ctx["env"], ctx["adapter"])
+            pm.kill(pid, sig)
+        except ValueError:
+            print("[aura kill] PID must be an integer.")
+        except Exception as e:
+            print(f"[aura kill] Error: {e}")
+
+    def _cmd_top(self, args, ctx):
+        try:
+            from modules.process import ProcessModule
+            pm = ProcessModule(ctx["env"], ctx["adapter"])
+            pm.top()
+        except Exception as e:
+            print(f"[aura top] Error: {e}")
+
+    def _cmd_jobs(self, args, ctx):
+        try:
+            from modules.process import ProcessModule
+            pm = ProcessModule(ctx["env"], ctx["adapter"])
+            pm.jobs()
+        except Exception as e:
+            print(f"[aura jobs] Error: {e}")
+
+    # ------------------------------------------------------------------ #
+    # Interactive shell
+    # ------------------------------------------------------------------ #
+
+    def _cmd_shell(self, args, ctx):
+        try:
+            from modules.shell import ShellModule
+            sh = ShellModule(ctx["env"], ctx["adapter"])
+            sh.start()
+        except Exception as e:
+            print(f"[aura shell] Error: {e}")

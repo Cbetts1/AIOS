@@ -501,8 +501,17 @@ def lookup(query: str) -> Optional[str]:
         # Handle composite names like "vi/vim", "test / [ ]", "cron/crontab"
         for variant in cmd_name.split("/"):
             variant = variant.strip()
-            if variant in q.split() or f" {variant} " in f" {q} ":
-                return _format_linux_command(cmd_info)
+            if not variant:
+                continue
+            # For alphanumeric command names, do a word-boundary match
+            if variant.isalnum():
+                q_words = q.split()
+                if variant in q_words:
+                    return _format_linux_command(cmd_info)
+            else:
+                # For special-character commands (e.g. "[ ]"), do substring match
+                if variant in q:
+                    return _format_linux_command(cmd_info)
 
     # 4. Look for Linux category match
     for category, data in LINUX_COMMANDS.items():

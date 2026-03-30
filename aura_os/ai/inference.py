@@ -36,14 +36,11 @@ class LocalInference:
     def query(self, prompt: str, model: Optional[str] = None, max_tokens: int = 512) -> str:
         """Run *prompt* through the best available local runtime.
 
-        First checks the built-in knowledge base for a direct answer.
-        If a local AI runtime is available, the prompt is enriched with
+        First checks for a local AI runtime and enriches the prompt with
         AURA system context so the model can give informed answers.
-        Falls back to an instructional message when no runtime exists.
+        If no runtime exists, falls back to the built-in knowledge base
+        for fast, offline answers, or returns an instructional message.
         """
-        # Try built-in knowledge base first for fast, offline answers
-        kb_answer = knowledge_lookup(prompt)
-
         runtime = self._mm.get_active_runtime()
 
         if runtime == "ollama":
@@ -53,7 +50,8 @@ class LocalInference:
             enriched = self._enrich_prompt(prompt)
             return self._query_llama_cpp(enriched, model, max_tokens)
 
-        # No LLM available — return knowledge-base answer or install hint
+        # No LLM available — try knowledge-base answer, then install hint
+        kb_answer = knowledge_lookup(prompt)
         if kb_answer:
             return kb_answer
 

@@ -2,6 +2,8 @@
 
 from typing import Dict, Type
 
+from aura_os.shell.colors import dim, red, yellow
+
 
 class CommandRouter:
     """Dispatches parsed CLI arguments to the appropriate command handler.
@@ -42,12 +44,14 @@ class CommandRouter:
 
         if command is None:
             # No sub-command: print help hint
-            print("No command given. Run 'aura --help' for usage.")
+            print(f"  {yellow('No command given.')} "
+                  f"Run {dim('aura --help')} for usage.")
             return 2
 
         handler_class = self._handlers.get(command)
         if handler_class is None:
-            print(f"Unknown command '{command}'. Run 'aura --help' for usage.")
+            print(f"  {red('Unknown command')} '{command}'. "
+                  f"Run {dim('aura --help')} for usage.")
             return 1
 
         handler = handler_class()

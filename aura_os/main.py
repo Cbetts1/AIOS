@@ -12,65 +12,9 @@ def _bootstrap():
 
 
 def _run_shell(eal):
-    """Launch a simple REPL for interactive use."""
-    from aura_os.engine.cli import build_parser
-    from aura_os.engine.router import CommandRouter
-    from aura_os.engine.commands.run import RunCommand
-    from aura_os.engine.commands.ai import AiCommand
-    from aura_os.engine.commands.env_cmd import EnvCommand
-    from aura_os.engine.commands.pkg import PkgCommand
-    from aura_os.engine.commands.sys_cmd import SysCommand
-
-    router = CommandRouter()
-    router.register("run", RunCommand)
-    router.register("ai", AiCommand)
-    router.register("env", EnvCommand)
-    router.register("pkg", PkgCommand)
-    router.register("sys", SysCommand)
-
-    parser = build_parser()
-    prompt = "aura> "
-
-    # Try to enable readline history
-    try:
-        import readline
-        import atexit
-        history_path = os.path.expanduser(
-            os.environ.get("AURA_HOME", "~/.aura") + "/data/.history"
-        )
-        os.makedirs(os.path.dirname(history_path), exist_ok=True)
-        try:
-            readline.read_history_file(history_path)
-        except OSError:
-            pass
-        atexit.register(readline.write_history_file, history_path)
-    except ImportError:
-        pass
-
-    print(f"AURA OS shell. Type 'exit' or Ctrl-D to quit.")
-    while True:
-        try:
-            line = input(prompt).strip()
-        except EOFError:
-            print()
-            break
-        except KeyboardInterrupt:
-            print()
-            continue
-
-        if not line:
-            continue
-        if line.lower() in ("exit", "quit"):
-            break
-
-        try:
-            parsed = parser.parse_args(line.split())
-            router.dispatch(parsed, eal)
-        except SystemExit:
-            # argparse calls sys.exit on --help; catch it gracefully in the REPL
-            pass
-        except Exception as exc:  # noqa: BLE001
-            print(f"[shell] Error: {exc}")
+    """Launch the modern interactive shell."""
+    from aura_os.shell.shell import run_shell
+    run_shell(eal)
 
 
 def main(argv=None):
@@ -91,10 +35,12 @@ def main(argv=None):
 
     verbose = getattr(args, "verbose", False)
 
+    from aura_os.shell.colors import red, cyan, dim
+
     try:
         eal = EAL()
     except Exception as exc:  # noqa: BLE001
-        print(f"[aura] Failed to initialise EAL: {exc}", file=sys.stderr)
+        print(f"{red('[aura]')} Failed to initialise EAL: {exc}", file=sys.stderr)
         return 1
 
     if args.command == "shell":
@@ -122,7 +68,7 @@ def main(argv=None):
             import traceback
             traceback.print_exc()
         else:
-            print(f"[aura] Error: {exc}", file=sys.stderr)
+            print(f"{red('[aura]')} Error: {exc}", file=sys.stderr)
         return 1
 
 

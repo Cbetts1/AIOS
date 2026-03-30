@@ -2,6 +2,7 @@
 
 from aura_os.pkg.manager import PackageManager
 from aura_os.pkg.registry import LocalRegistry
+from aura_os.shell.colors import bold, cyan, dim, green, red, yellow
 
 
 class PkgCommand:
@@ -30,39 +31,39 @@ class PkgCommand:
         if sub == "list":
             packages = manager.list_installed()
             if not packages:
-                print("[pkg] No packages installed.")
+                print(f"  {yellow('[pkg]')} No packages installed.")
             else:
-                print(f"{'NAME':<24} {'VERSION':<12} DESCRIPTION")
-                print("─" * 64)
+                print(f"  {bold('NAME'):<34} {bold('VERSION'):<22} {bold('DESCRIPTION')}")
+                print(f"  {dim('─' * 64)}")
                 for pkg in packages:
                     name = pkg.get("name", "?")
                     ver = pkg.get("version", "?")
                     desc = pkg.get("description", "")
-                    print(f"{name:<24} {ver:<12} {desc}")
+                    print(f"  {cyan(name):<34} {green(ver):<22} {desc}")
             return 0
 
         if sub == "search":
             results = manager.search(args.query)
             if not results:
-                print(f"[pkg] No packages found matching '{args.query}'.")
+                print(f"  {yellow('[pkg]')} No packages found matching '{args.query}'.")
             else:
-                print(f"{'NAME':<24} {'VERSION':<12} DESCRIPTION")
-                print("─" * 64)
+                print(f"  {bold('NAME'):<34} {bold('VERSION'):<22} {bold('DESCRIPTION')}")
+                print(f"  {dim('─' * 64)}")
                 for pkg in results:
                     name = pkg.get("name", "?")
                     ver = pkg.get("version", "?")
                     desc = pkg.get("description", "")
-                    print(f"{name:<24} {ver:<12} {desc}")
+                    print(f"  {cyan(name):<34} {green(ver):<22} {desc}")
             return 0
 
         if sub == "info":
             pkg = registry.get_package(args.name)
             if pkg is None:
-                print(f"[pkg] Package '{args.name}' not found in registry.")
+                print(f"  {red('[pkg]')} Package '{args.name}' not found in registry.")
                 return 1
             for key, value in pkg.items():
-                print(f"  {key:<16}: {value}")
+                print(f"  {bold(key):<26}: {value}")
             return 0
 
-        print(f"[pkg] Unknown sub-command '{sub}'. Run 'aura pkg --help'.")
+        print(f"  {red('[pkg]')} Unknown sub-command '{sub}'. Run 'aura pkg --help'.")
         return 1

@@ -2,6 +2,8 @@
 
 import json
 
+from aura_os.shell.colors import bold, cyan, dim, green, header, red, yellow
+
 
 class EnvCommand:
     """Display environment information gathered from the EAL.
@@ -25,41 +27,47 @@ class EnvCommand:
 
     @staticmethod
     def _print_human(info: dict):
-        """Render *info* as a human-readable table."""
-        print("─" * 50)
-        print(f"  AURA OS — Environment Info")
-        print("─" * 50)
+        """Render *info* as a human-readable, coloured table."""
+        sep = dim("─" * 50)
+        print(sep)
+        print(f"  {header('⬡ AURA OS')} — {bold('Environment Info')}")
+        print(sep)
 
-        print(f"\n  Platform   : {info.get('platform', 'unknown')}")
-        print(f"  Pkg manager: {info.get('pkg_manager') or 'none detected'}")
+        print(f"\n  {bold('Platform')}   : {cyan(info.get('platform', 'unknown'))}")
+        pkg_mgr = info.get('pkg_manager') or 'none detected'
+        print(f"  {bold('Pkg manager')}: {pkg_mgr}")
 
         # Paths
         paths = info.get("paths", {})
         if paths:
-            print("\n  Paths:")
+            print(f"\n  {bold('Paths:')}")
             for k, v in paths.items():
-                print(f"    {k:<18}: {v}")
+                print(f"    {dim(k + ':'):<28} {v}")
 
         # System
         system = info.get("system", {})
         if system:
-            print("\n  System:")
+            print(f"\n  {bold('System:')}")
             for k, v in system.items():
                 if k == "memory" and isinstance(v, dict):
                     mem = v
                     total_mb = mem.get("total_kb", mem.get("total", 0) // 1024) // 1024
                     used_mb = mem.get("used_kb", mem.get("used", 0) // 1024) // 1024
                     pct = mem.get("percent", 0)
-                    print(f"    {'memory':<18}: {used_mb} MB / {total_mb} MB  ({pct}%)")
+                    color = green if pct < 50 else (yellow if pct < 80 else red)
+                    print(f"    {dim('memory:'):<28} "
+                          f"{color(f'{used_mb} MB / {total_mb} MB  ({pct}%)')}")
                 else:
-                    print(f"    {k:<18}: {v}")
+                    print(f"    {dim(k + ':'):<28} {v}")
 
         # Binaries
         binaries = info.get("binaries", {})
         if binaries:
-            print("\n  Available binaries:")
+            print(f"\n  {bold('Available binaries:')}")
             for name, path in sorted(binaries.items()):
-                status = path if path else "not found"
-                print(f"    {name:<14}: {status}")
+                if path:
+                    print(f"    {cyan(name):<24} {dim(str(path))}")
+                else:
+                    print(f"    {dim(name):<24} {red('not found')}")
 
         print()

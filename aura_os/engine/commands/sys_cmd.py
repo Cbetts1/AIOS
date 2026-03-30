@@ -5,6 +5,10 @@ import time
 
 from aura_os import __version__
 from aura_os.kernel.memory import MemoryTracker
+from aura_os.shell.colors import (
+    bold, bright_cyan, cyan, dim, green, header, red, yellow,
+    progress_bar,
+)
 
 
 def _uptime() -> str:
@@ -56,7 +60,7 @@ def _process_count() -> int:
 
 
 def _render(eal) -> str:
-    """Build the sys-status string."""
+    """Build the sys-status string with colour."""
     tracker = MemoryTracker()
     mem = tracker.get_system_memory()
     disk = _disk_usage()
@@ -68,23 +72,26 @@ def _render(eal) -> str:
     avail_mb = mem.get("available", 0) // 1024 // 1024
     mem_pct = mem.get("percent", 0)
 
+    sep = dim("─" * 50)
     lines = [
-        "─" * 50,
-        f"  AURA OS {__version__}  —  System Status",
-        "─" * 50,
-        f"  Platform   : {eal.platform}",
-        f"  Uptime     : {uptime_str}",
-        f"  Processes  : {proc_count}",
+        sep,
+        f"  {header('⬡ AURA OS')} {dim('v' + __version__)}  —  {bold('System Status')}",
+        sep,
+        f"  {bold('Platform')}   : {cyan(str(eal.platform))}",
+        f"  {bold('Uptime')}     : {green(uptime_str)}",
+        f"  {bold('Processes')}  : {str(proc_count)}",
         "",
-        f"  Memory     : {used_mb} MB used / {total_mb} MB total  ({mem_pct}%)",
-        f"               {avail_mb} MB available",
+        f"  {bold('Memory')}     : {used_mb} MB / {total_mb} MB",
+        f"               {progress_bar(mem_pct)}",
+        f"               {dim(str(avail_mb) + ' MB available')}",
     ]
 
     if disk:
         lines += [
             "",
-            f"  Disk (/)   : {disk['used_gb']} GB used / {disk['total_gb']} GB total  ({disk['percent']}%)",
-            f"               {disk['free_gb']} GB free",
+            f"  {bold('Disk (/)')}   : {disk['used_gb']} GB / {disk['total_gb']} GB",
+            f"               {progress_bar(disk['percent'])}",
+            f"               {dim(str(disk['free_gb']) + ' GB free')}",
         ]
 
     lines.append("")

@@ -157,48 +157,55 @@ class BrowserModule:
     # ------------------------------------------------------------------ #
 
     def start_terminal(self):
-        """Render a simple terminal-based status dashboard."""
+        """Render a colourful terminal-based status dashboard."""
+        from aura_os.shell.colors import (
+            bold, bright_cyan, cyan, dim, green, header, yellow,
+            progress_bar,
+        )
+
         env = self.env
         width = 60
 
         def line(char="─"):
-            return "  " + char * width
+            return "  " + dim(char * width)
 
-        def row(label, value):
-            return f"  {label:<18} {value}"
+        def row(lbl, value):
+            return f"  {bold(lbl):<28} {value}"
 
         print()
-        print("  ╔" + "═" * width + "╗")
-        print("  ║" + "  ⬡ AURA OS  —  Terminal Dashboard".center(width) + "║")
-        print("  ╚" + "═" * width + "╝")
+        print(f"  ╔{dim('═' * width)}╗")
+        print(f"  ║{header('  ⬡ AURA OS  —  Terminal Dashboard').center(width + 20)}║")
+        print(f"  ╚{dim('═' * width)}╝")
         print(line())
-        print(row("Platform:", env.get("env_type", "unknown")))
-        print(row("Termux:", "yes" if env.get("is_termux") else "no"))
+        print(row("Platform:", cyan(env.get("env_type", "unknown"))))
+        print(row("Termux:", green("yes") if env.get("is_termux") else dim("no")))
         ram = env.get("ram_mb", 0)
-        print(row("RAM:", f"{ram} MB" if ram else "unknown"))
-        print(row("Network:", "yes" if env.get("has_network") else "no"))
+        print(row("RAM:", f"{ram} MB" if ram else dim("unknown")))
+        print(row("Network:", green("yes") if env.get("has_network") else dim("no")))
         print(row("Storage root:", env.get("storage_root", "?")))
-        print(row("Python:", env.get("python", "?")))
+        print(row("Python:", cyan(env.get("python", "?"))))
         print(line())
         caps = sorted(env.get("capabilities", []))
-        print("  Capabilities:")
+        print(f"  {bold('Capabilities:')}")
         for chunk in [caps[i:i+4] for i in range(0, len(caps), 4)]:
-            print("    " + "  ".join(f"[{c}]" for c in chunk))
+            print("    " + "  ".join(cyan(f"[{c}]") for c in chunk))
         print(line())
 
         # Available binaries
         binaries = {k: v for k, v in env.get("binaries", {}).items() if v}
         if binaries:
-            print("  Available binaries:")
-            for i, (b, _) in enumerate(sorted(binaries.items())):
+            print(f"  {bold('Available binaries:')}")
+            items = sorted(binaries.items())
+            for i, (b, _) in enumerate(items):
                 end = "\n" if (i + 1) % 4 == 0 else ""
-                print(f"    {b:<12}", end=end)
-            print()
+                print(f"    {green(b):<22}", end=end)
+            if len(items) % 4 != 0:
+                print()
         print(line())
-        print("  Quick start:")
-        print("    aura help              — show all commands")
-        print('    aura ai "your question" — offline AI assistant')
-        print("    aura sys info          — detailed system info")
-        print("    aura fs ls             — file browser")
+        print(f"  {bold('Quick start:')}")
+        print(f"    {cyan('aura help')}              — show all commands")
+        print(f"    {cyan('aura ai')} {dim('\"your question\"')} — offline AI assistant")
+        print(f"    {cyan('aura sys info')}          — detailed system info")
+        print(f"    {cyan('aura fs ls')}             — file browser")
         print(line())
         print()

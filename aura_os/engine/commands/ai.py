@@ -2,6 +2,7 @@
 
 from aura_os.ai.inference import LocalInference
 from aura_os.ai.model_manager import ModelManager
+from aura_os.shell.colors import cyan, dim, green, red
 
 
 class AiCommand:
@@ -22,11 +23,11 @@ class AiCommand:
         mm = ModelManager()
         inference = LocalInference(model_manager=mm)
 
-        print("[aura ai] Querying local AI…\n")
+        print(f"  {cyan('[aura ai]')} {dim('Querying local AI…')}\n")
         try:
             response = inference.query(prompt, model=model, max_tokens=max_tokens)
-            print(response)
+            print(f"  {green('❯')} {response}")
             return 0
         except Exception as exc:  # noqa: BLE001
-            print(f"[aura ai] Unexpected error: {exc}")
+            print(f"  {red('[aura ai]')} Unexpected error: {exc}")
             return 1

@@ -11,15 +11,18 @@ def _bootstrap():
         os.environ["AURA_HOME"] = os.path.expanduser("~/.aura")
 
 
-def _run_shell(eal):
-    """Launch a simple REPL for interactive use."""
-    from aura_os.engine.cli import build_parser
+def _build_router():
+    """Create a CommandRouter and register all command handlers."""
     from aura_os.engine.router import CommandRouter
     from aura_os.engine.commands.run import RunCommand
     from aura_os.engine.commands.ai import AiCommand
     from aura_os.engine.commands.env_cmd import EnvCommand
     from aura_os.engine.commands.pkg import PkgCommand
     from aura_os.engine.commands.sys_cmd import SysCommand
+    from aura_os.engine.commands.ps_cmd import PsCommand
+    from aura_os.engine.commands.kill_cmd import KillCommand
+    from aura_os.engine.commands.service_cmd import ServiceCommand
+    from aura_os.engine.commands.log_cmd import LogCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -27,9 +30,32 @@ def _run_shell(eal):
     router.register("env", EnvCommand)
     router.register("pkg", PkgCommand)
     router.register("sys", SysCommand)
+    router.register("ps", PsCommand)
+    router.register("kill", KillCommand)
+    router.register("service", ServiceCommand)
+    router.register("log", LogCommand)
+    return router
 
+
+# ------------------------------------------------------------------
+# Enhanced interactive shell
+# ------------------------------------------------------------------
+
+def _run_shell(eal):
+    """Launch an enhanced REPL with built-in shell commands."""
+    from aura_os.engine.cli import build_parser
+    from aura_os.kernel.syslog import Syslog
+    from aura_os.fs.procfs import ProcFS
+
+    router = _build_router()
     parser = build_parser()
-    prompt = "aura> "
+    syslog = Syslog()
+    procfs = ProcFS()
+
+    # Shell state
+    env_vars = dict(os.environ)
+    aliases = {}
+    cwd = os.getcwd()
 
     # Try to enable readline history
     try:
@@ -47,9 +73,15 @@ def _run_shell(eal):
     except ImportError:
         pass
 
-    print(f"AURA OS shell. Type 'exit' or Ctrl-D to quit.")
+    syslog.info("shell", "Interactive shell started")
+
+    prompt = "aura> "
+    print("AURA OS shell — type 'help' for commands, 'exit' to quit.")
     while True:
         try:
+            # Update prompt with cwd
+            short_cwd = cwd.replace(os.path.expanduser("~"), "~")
+            prompt = f"aura:{short_cwd}> "
             line = input(prompt).strip()
         except EOFError:
             print()
@@ -60,18 +92,510 @@ def _run_shell(eal):
 
         if not line:
             continue
-        if line.lower() in ("exit", "quit"):
+
+        # Expand aliases
+        parts = line.split()
+        if parts[0] in aliases:
+            line = aliases[parts[0]] + " " + " ".join(parts[1:])
+            parts = line.split()
+
+        # Expand environment variables ($VAR and ${VAR})
+        line = _expand_env_vars(line, env_vars)
+
+        # Handle pipes
+        if "|" in line:
+            _handle_pipe(line, cwd, env_vars)
+            continue
+
+        # Handle output redirection
+        if ">>" in line or ">" in line:
+            _handle_redirect(line, cwd, env_vars)
+            continue
+
+        # Built-in commands
+        cmd = parts[0].lower() if parts else ""
+
+        if cmd in ("exit", "quit"):
+            syslog.info("shell", "Shell exiting")
             break
 
+        if cmd == "cd":
+            target = parts[1] if len(parts) > 1 else os.path.expanduser("~")
+            target = _expand_env_vars(target, env_vars)
+            target = os.path.expanduser(target)
+            if not os.path.isabs(target):
+                target = os.path.join(cwd, target)
+            target = os.path.realpath(target)
+            if os.path.isdir(target):
+                cwd = target
+                os.chdir(cwd)
+                env_vars["PWD"] = cwd
+            else:
+                print(f"cd: no such directory: {target}")
+            continue
+
+        if cmd == "pwd":
+            print(cwd)
+            continue
+
+        if cmd == "echo":
+            print(" ".join(parts[1:]))
+            continue
+
+        if cmd == "export":
+            if len(parts) < 2:
+                for k, v in sorted(env_vars.items()):
+                    print(f"  {k}={v}")
+            else:
+                for arg in parts[1:]:
+                    if "=" in arg:
+                        key, _, val = arg.partition("=")
+                        env_vars[key] = val
+                        os.environ[key] = val
+                    else:
+                        val = env_vars.get(arg, "")
+                        print(f"  {arg}={val}")
+            continue
+
+        if cmd == "set":
+            if len(parts) < 2:
+                for k, v in sorted(env_vars.items()):
+                    print(f"  {k}={v}")
+            elif len(parts) >= 3 and parts[1].isidentifier():
+                env_vars[parts[1]] = " ".join(parts[2:])
+            else:
+                print("Usage: set <name> <value>")
+            continue
+
+        if cmd == "unset":
+            if len(parts) < 2:
+                print("Usage: unset <name>")
+            else:
+                env_vars.pop(parts[1], None)
+                os.environ.pop(parts[1], None)
+            continue
+
+        if cmd == "alias":
+            if len(parts) < 2:
+                for k, v in sorted(aliases.items()):
+                    print(f"  alias {k}='{v}'")
+            else:
+                for arg in parts[1:]:
+                    if "=" in arg:
+                        key, _, val = arg.partition("=")
+                        aliases[key] = val.strip("'\"")
+                    else:
+                        a = aliases.get(arg)
+                        if a:
+                            print(f"  alias {arg}='{a}'")
+                        else:
+                            print(f"  alias: {arg}: not found")
+            continue
+
+        if cmd == "unalias":
+            if len(parts) < 2:
+                print("Usage: unalias <name>")
+            else:
+                aliases.pop(parts[1], None)
+            continue
+
+        if cmd == "history":
+            try:
+                import readline
+                length = readline.get_current_history_length()
+                start = max(1, length - 25)
+                for i in range(start, length + 1):
+                    item = readline.get_history_item(i)
+                    if item:
+                        print(f"  {i:>5}  {item}")
+            except ImportError:
+                print("  (readline not available)")
+            continue
+
+        if cmd == "clear":
+            print("\033[2J\033[H", end="")
+            continue
+
+        if cmd == "whoami":
+            import getpass
+            print(getpass.getuser())
+            continue
+
+        if cmd == "hostname":
+            import platform as plat
+            print(plat.node())
+            continue
+
+        if cmd == "date":
+            import datetime
+            print(datetime.datetime.now().strftime("%a %b %d %H:%M:%S %Z %Y"))
+            continue
+
+        if cmd == "uname":
+            import platform as plat
+            flag = parts[1] if len(parts) > 1 else "-s"
+            u = plat.uname()
+            if flag == "-a":
+                print(f"{u.system} {u.node} {u.release} {u.version} {u.machine}")
+            elif flag == "-r":
+                print(u.release)
+            elif flag == "-m":
+                print(u.machine)
+            elif flag == "-n":
+                print(u.node)
+            else:
+                print(u.system)
+            continue
+
+        if cmd == "uptime":
+            content = procfs.read("uptime")
+            if content:
+                secs = float(content.split()[0])
+                days = int(secs // 86400)
+                hours = int((secs % 86400) // 3600)
+                mins = int((secs % 3600) // 60)
+                parts_str = []
+                if days:
+                    parts_str.append(f"{days} day(s)")
+                if hours:
+                    parts_str.append(f"{hours}h")
+                parts_str.append(f"{mins}m")
+                print(f"  up {', '.join(parts_str)}")
+            continue
+
+        if cmd == "cat":
+            if len(parts) < 2:
+                print("Usage: cat <file>")
+            else:
+                path = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        print(fh.read(), end="")
+                except OSError as exc:
+                    print(f"cat: {exc}")
+            continue
+
+        if cmd == "ls":
+            target_dir = parts[1] if len(parts) > 1 else cwd
+            if not os.path.isabs(target_dir):
+                target_dir = os.path.join(cwd, target_dir)
+            try:
+                entries = sorted(os.listdir(target_dir))
+                for entry in entries:
+                    full = os.path.join(target_dir, entry)
+                    if os.path.isdir(full):
+                        print(f"  {entry}/")
+                    else:
+                        print(f"  {entry}")
+            except OSError as exc:
+                print(f"ls: {exc}")
+            continue
+
+        if cmd == "mkdir":
+            if len(parts) < 2:
+                print("Usage: mkdir <dir>")
+            else:
+                target = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                try:
+                    os.makedirs(target, exist_ok=True)
+                except OSError as exc:
+                    print(f"mkdir: {exc}")
+            continue
+
+        if cmd == "rm":
+            if len(parts) < 2:
+                print("Usage: rm <path>")
+            else:
+                import shutil
+                target = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                try:
+                    if os.path.isdir(target):
+                        shutil.rmtree(target)
+                    else:
+                        os.remove(target)
+                except OSError as exc:
+                    print(f"rm: {exc}")
+            continue
+
+        if cmd == "touch":
+            if len(parts) < 2:
+                print("Usage: touch <file>")
+            else:
+                target = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                try:
+                    open(target, "a", encoding="utf-8").close()  # noqa: SIM115
+                except OSError as exc:
+                    print(f"touch: {exc}")
+            continue
+
+        if cmd == "cp":
+            if len(parts) < 3:
+                print("Usage: cp <src> <dst>")
+            else:
+                import shutil
+                src = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                dst = os.path.join(cwd, parts[2]) if not os.path.isabs(parts[2]) else parts[2]
+                try:
+                    if os.path.isdir(src):
+                        shutil.copytree(src, dst)
+                    else:
+                        shutil.copy2(src, dst)
+                except OSError as exc:
+                    print(f"cp: {exc}")
+            continue
+
+        if cmd == "mv":
+            if len(parts) < 3:
+                print("Usage: mv <src> <dst>")
+            else:
+                import shutil
+                src = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                dst = os.path.join(cwd, parts[2]) if not os.path.isabs(parts[2]) else parts[2]
+                try:
+                    shutil.move(src, dst)
+                except OSError as exc:
+                    print(f"mv: {exc}")
+            continue
+
+        if cmd == "head":
+            if len(parts) < 2:
+                print("Usage: head <file> [n]")
+            else:
+                path = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                n = int(parts[2]) if len(parts) > 2 else 10
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        for i, line_text in enumerate(fh):
+                            if i >= n:
+                                break
+                            print(line_text, end="")
+                except OSError as exc:
+                    print(f"head: {exc}")
+            continue
+
+        if cmd == "tail":
+            if len(parts) < 2:
+                print("Usage: tail <file> [n]")
+            else:
+                path = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                n = int(parts[2]) if len(parts) > 2 else 10
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        all_lines = fh.readlines()
+                    for text_line in all_lines[-n:]:
+                        print(text_line, end="")
+                except OSError as exc:
+                    print(f"tail: {exc}")
+            continue
+
+        if cmd == "wc":
+            if len(parts) < 2:
+                print("Usage: wc <file>")
+            else:
+                path = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        content = fh.read()
+                    line_ct = content.count("\n")
+                    word_ct = len(content.split())
+                    char_ct = len(content)
+                    print(f"  {line_ct} {word_ct} {char_ct} {parts[1]}")
+                except OSError as exc:
+                    print(f"wc: {exc}")
+            continue
+
+        if cmd == "grep":
+            if len(parts) < 3:
+                print("Usage: grep <pattern> <file>")
+            else:
+                pattern = parts[1]
+                path = os.path.join(cwd, parts[2]) if not os.path.isabs(parts[2]) else parts[2]
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        for i, text_line in enumerate(fh, 1):
+                            if pattern in text_line:
+                                print(f"  {i}: {text_line}", end="")
+                except OSError as exc:
+                    print(f"grep: {exc}")
+            continue
+
+        if cmd == "which":
+            if len(parts) < 2:
+                print("Usage: which <binary>")
+            else:
+                import shutil
+                result = shutil.which(parts[1])
+                if result:
+                    print(result)
+                else:
+                    print(f"  {parts[1]} not found")
+            continue
+
+        if cmd == "proc":
+            if len(parts) < 2:
+                entries = procfs.ls()
+                for e in entries:
+                    print(f"  {e}")
+            else:
+                proc_path = "/".join(parts[1:])
+                content = procfs.read(proc_path)
+                if content is not None:
+                    print(content, end="")
+                else:
+                    print(f"  /proc/{proc_path}: not found")
+            continue
+
+        if cmd == "help":
+            _print_shell_help()
+            continue
+
+        # Fall through to aura CLI commands
         try:
             parsed = parser.parse_args(line.split())
             router.dispatch(parsed, eal)
         except SystemExit:
-            # argparse calls sys.exit on --help; catch it gracefully in the REPL
             pass
         except Exception as exc:  # noqa: BLE001
             print(f"[shell] Error: {exc}")
 
+
+def _expand_env_vars(text: str, env: dict) -> str:
+    """Expand $VAR and ${VAR} references in *text*."""
+    import re
+    def _replacer(match):
+        var = match.group(1) or match.group(2)
+        return env.get(var, "")
+    return re.sub(r"\$\{(\w+)\}|\$(\w+)", _replacer, text)
+
+
+def _handle_pipe(line: str, cwd: str, env: dict):
+    """Execute a pipeline of shell commands."""
+    import subprocess
+    segments = [s.strip() for s in line.split("|")]
+    prev_stdout = None
+    processes = []
+
+    for i, segment in enumerate(segments):
+        import shlex
+        try:
+            cmd_list = shlex.split(segment)
+        except ValueError:
+            print(f"[shell] Invalid command in pipe: {segment}")
+            return
+
+        is_last = (i == len(segments) - 1)
+        proc = subprocess.Popen(
+            cmd_list,
+            stdin=prev_stdout,
+            stdout=None if is_last else subprocess.PIPE,
+            stderr=None,
+            cwd=cwd,
+            env=env,
+        )
+        processes.append(proc)
+        if prev_stdout is not None:
+            prev_stdout.close()
+        prev_stdout = proc.stdout
+
+    for proc in processes:
+        proc.wait()
+
+
+def _handle_redirect(line: str, cwd: str, env: dict):
+    """Execute a command with output redirection (> or >>)."""
+    import subprocess
+    import shlex
+
+    if ">>" in line:
+        parts = line.split(">>", 1)
+        mode = "a"
+    else:
+        parts = line.split(">", 1)
+        mode = "w"
+
+    cmd_str = parts[0].strip()
+    filepath = parts[1].strip()
+
+    if not os.path.isabs(filepath):
+        filepath = os.path.join(cwd, filepath)
+
+    try:
+        cmd_list = shlex.split(cmd_str)
+    except ValueError:
+        print(f"[shell] Invalid command: {cmd_str}")
+        return
+
+    try:
+        with open(filepath, mode, encoding="utf-8") as fh:
+            subprocess.run(cmd_list, stdout=fh, stderr=None, cwd=cwd, env=env)
+    except OSError as exc:
+        print(f"[shell] Redirect error: {exc}")
+
+
+def _print_shell_help():
+    """Print help for the enhanced shell."""
+    print("""
+  AURA OS Shell — Built-in Commands
+  ──────────────────────────────────────────────────
+  Navigation & Files:
+    cd <dir>          Change directory
+    pwd               Print working directory
+    ls [dir]          List directory contents
+    cat <file>        Print file contents
+    head <file> [n]   Print first n lines (default 10)
+    tail <file> [n]   Print last n lines (default 10)
+    mkdir <dir>       Create directory
+    rm <path>         Remove file or directory
+    touch <file>      Create empty file
+    cp <src> <dst>    Copy file or directory
+    mv <src> <dst>    Move/rename file or directory
+    wc <file>         Count lines, words, chars
+    grep <pat> <file> Search for pattern in file
+    which <binary>    Locate a binary in PATH
+
+  Environment & Variables:
+    export [VAR=val]  Set/show environment variables
+    set <name> <val>  Set a shell variable
+    unset <name>      Remove a variable
+    alias [name=cmd]  Set/show command aliases
+    unalias <name>    Remove an alias
+    echo <text>       Print text (supports $VAR expansion)
+
+  System:
+    whoami            Print current user
+    hostname          Print hostname
+    date              Print current date/time
+    uname [-a|-r|-m]  Print system information
+    uptime            Show session uptime
+    clear             Clear the terminal
+
+  AURA OS Commands:
+    ps                List tracked processes
+    kill <pid>        Send signal to a process
+    service <cmd>     Manage services (list/start/stop/...)
+    log <cmd>         View system logs (tail/search/clear)
+    sys               Show system status
+    env               Show environment info
+    pkg <cmd>         Package management
+    run <file>        Run a script
+    ai <prompt>       Query AI assistant
+    proc [path]       Read virtual /proc files
+
+  Shell Features:
+    cmd1 | cmd2       Pipe output between commands
+    cmd > file        Redirect output to file
+    cmd >> file       Append output to file
+    $VAR / ${VAR}     Environment variable expansion
+
+    exit / quit       Exit the shell
+    Ctrl-D            Exit the shell
+    Ctrl-C            Cancel current input
+""")
+
+
+# ------------------------------------------------------------------
+# Main entry
+# ------------------------------------------------------------------
 
 def main(argv=None):
     """Primary entry point for AURA OS CLI."""
@@ -79,12 +603,7 @@ def main(argv=None):
 
     from aura_os.eal import EAL
     from aura_os.engine.cli import build_parser
-    from aura_os.engine.router import CommandRouter
-    from aura_os.engine.commands.run import RunCommand
-    from aura_os.engine.commands.ai import AiCommand
-    from aura_os.engine.commands.env_cmd import EnvCommand
-    from aura_os.engine.commands.pkg import PkgCommand
-    from aura_os.engine.commands.sys_cmd import SysCommand
+    from aura_os.kernel.syslog import Syslog
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -97,6 +616,10 @@ def main(argv=None):
         print(f"[aura] Failed to initialise EAL: {exc}", file=sys.stderr)
         return 1
 
+    # Initialise system logger
+    syslog = Syslog()
+    syslog.info("kern", "AURA OS started")
+
     if args.command == "shell":
         _run_shell(eal)
         return 0
@@ -105,12 +628,7 @@ def main(argv=None):
         parser.print_help()
         return 0
 
-    router = CommandRouter()
-    router.register("run", RunCommand)
-    router.register("ai", AiCommand)
-    router.register("env", EnvCommand)
-    router.register("pkg", PkgCommand)
-    router.register("sys", SysCommand)
+    router = _build_router()
 
     try:
         return router.dispatch(args, eal)

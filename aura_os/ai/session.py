@@ -113,10 +113,20 @@ class SessionManager:
         self._dir = sessions_dir
         os.makedirs(self._dir, exist_ok=True)
 
+    @staticmethod
+    def _safe_id(session_id: str) -> str:
+        """Sanitise a session ID to prevent path-traversal attacks."""
+        # Only allow alphanumeric characters, hyphens, and underscores
+        safe = "".join(c for c in os.path.basename(session_id) if c.isalnum() or c in "-_")
+        if not safe:
+            raise ValueError("Invalid session ID")
+        return safe
+
     def new_session(self) -> Session:
         """Create and persist a fresh session."""
         session = Session()
-        session.save(os.path.join(self._dir, f"{session.session_id}.json"))
+        safe_id = self._safe_id(session.session_id)
+        session.save(os.path.join(self._dir, f"{safe_id}.json"))
         return session
 
     def list_sessions(self) -> List[str]:
@@ -132,14 +142,16 @@ class SessionManager:
 
     def get_session(self, session_id: str) -> Optional[Session]:
         """Load a session by ID, or return None."""
-        path = os.path.join(self._dir, f"{session_id}.json")
+        safe_id = self._safe_id(session_id)
+        path = os.path.join(self._dir, f"{safe_id}.json")
         if not os.path.isfile(path):
             return None
         return Session.load(path)
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a session file.  Returns True on success."""
-        path = os.path.join(self._dir, f"{session_id}.json")
+        safe_id = self._safe_id(session_id)
+        path = os.path.join(self._dir, f"{safe_id}.json")
         try:
             os.remove(path)
             return True

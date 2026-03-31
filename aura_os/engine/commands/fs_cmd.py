@@ -138,7 +138,8 @@ class FsCommand:
 
         for editor_name in ("nano", "micro", "vim", "vi"):
             if shutil.which(editor_name):
-                os.system(f"{editor_name} {p}")
+                import subprocess
+                subprocess.run([editor_name, str(p)])
                 return 0
 
         print(f"[fs] No text editor found. File path: {p}")

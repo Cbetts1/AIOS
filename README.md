@@ -111,7 +111,7 @@ aura ai "<prompt>"         Offline AI assistant
 
 aura fs ls [path]          List files/directories
 aura fs cat <file>         Print file contents
-aura fs find [path] [pat]  Search for files
+aura fs find [root] [pat]  Search for files
 aura fs mkdir <path>       Create directory
 aura fs rm <path>          Delete file or directory
 aura fs edit <file>        Open in text editor

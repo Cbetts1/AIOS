@@ -1,6 +1,7 @@
 """``aura auto`` command handler — task automation."""
 
 import json
+import shlex
 import time
 from datetime import datetime
 from pathlib import Path
@@ -118,7 +119,7 @@ class AutoCommand:
                 if not cmd:
                     print("SKIP (no cmd)")
                     continue
-                rc, out, err = eal.run_command(cmd if isinstance(cmd, list) else cmd.split())
+                rc, out, err = eal.run_command(cmd if isinstance(cmd, list) else shlex.split(cmd))
                 status = "OK" if rc == 0 else f"FAIL (code {rc})"
                 print(status)
                 log_lines.append(f"[step {i + 1}] run: {cmd}  -> {status}")

@@ -23,6 +23,9 @@ def _build_router():
     from aura_os.engine.commands.kill_cmd import KillCommand
     from aura_os.engine.commands.service_cmd import ServiceCommand
     from aura_os.engine.commands.log_cmd import LogCommand
+    from aura_os.engine.commands.center_cmd import CenterCommand
+    from aura_os.engine.commands.web_cmd import WebCommand
+    from aura_os.engine.commands.start_cmd import StartCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -34,6 +37,9 @@ def _build_router():
     router.register("kill", KillCommand)
     router.register("service", ServiceCommand)
     router.register("log", LogCommand)
+    router.register("center", CenterCommand)
+    router.register("web", WebCommand)
+    router.register("start", StartCommand)
     return router
 
 
@@ -626,8 +632,9 @@ def main(argv=None):
         return 0
 
     if args.command is None:
-        parser.print_help()
-        return 0
+        # Default: launch the Command Center (like Windows desktop)
+        from aura_os.engine.commands.start_cmd import StartCommand
+        return StartCommand().execute(args, eal)
 
     router = _build_router()
 

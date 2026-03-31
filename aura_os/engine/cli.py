@@ -132,4 +132,21 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------ shell
     subparsers.add_parser("shell", help="Launch the AURA interactive shell")
 
+    # ------------------------------------------------------------------ center
+    subparsers.add_parser("center", help="Open the AURA OS Command Center")
+
+    # ------------------------------------------------------------------ start
+    subparsers.add_parser("start", help="Clean OS boot sequence with Aura greeting")
+
+    # ------------------------------------------------------------------ web
+    web_p = subparsers.add_parser("web", help="Launch Command Center web server")
+    web_p.add_argument(
+        "--host", default="127.0.0.1",
+        help="Bind address (default: 127.0.0.1)",
+    )
+    web_p.add_argument(
+        "--port", type=int, default=7070,
+        help="Port number (default: 7070)",
+    )
+
     return parser

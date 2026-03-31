@@ -23,6 +23,10 @@ def _build_router():
     from aura_os.engine.commands.kill_cmd import KillCommand
     from aura_os.engine.commands.service_cmd import ServiceCommand
     from aura_os.engine.commands.log_cmd import LogCommand
+    from aura_os.engine.commands.fs_cmd import FsCommand
+    from aura_os.engine.commands.repo_cmd import RepoCommand
+    from aura_os.engine.commands.auto_cmd import AutoCommand
+    from aura_os.engine.commands.help_cmd import HelpCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -34,6 +38,10 @@ def _build_router():
     router.register("kill", KillCommand)
     router.register("service", ServiceCommand)
     router.register("log", LogCommand)
+    router.register("fs", FsCommand)
+    router.register("repo", RepoCommand)
+    router.register("auto", AutoCommand)
+    router.register("help", HelpCommand)
     return router
 
 

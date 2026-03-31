@@ -102,19 +102,25 @@ aura help
 
 ```
 aura help                  Show all commands
-aura sys info              System information
-aura sys caps              Detected capabilities
-aura env                   Full environment JSON
-aura reload                Re-detect environment
+aura sys [--watch]         System information (CPU, RAM, disk)
+aura env [--json]          Full environment information
+aura shell                 Launch interactive AURA shell
 
 aura run <file>            Run .py / .sh / .js file
 aura ai "<prompt>"         Offline AI assistant
+
 aura fs ls [path]          List files/directories
 aura fs cat <file>         Print file contents
 aura fs find [path] [pat]  Search for files
 aura fs mkdir <path>       Create directory
 aura fs rm <path>          Delete file or directory
 aura fs edit <file>        Open in text editor
+
+aura pkg install <name>    Install a package
+aura pkg remove <name>     Remove a package
+aura pkg list              List installed packages
+aura pkg search <query>    Search for packages
+aura pkg info <name>       Package details
 
 aura repo create <name>    Init a new git repo
 aura repo list             List managed repos
@@ -125,9 +131,15 @@ aura auto list             List automation tasks
 aura auto create <name>    Create a task template
 aura auto run <name>       Execute a task
 
-aura ui                    Auto-select UI (web or terminal)
-aura ui web                Launch web UI (http://localhost:7070)
-aura ui term               Launch terminal dashboard
+aura ps                    List tracked processes
+aura kill <pid> [-s SIG]   Send signal to a process
+
+aura service list          List all services
+aura service start <name>  Start a service
+aura service stop <name>   Stop a service
+aura service create <name> Create a service definition
+
+aura log [tail|search|clear]  View / search system logs
 ```
 
 ---

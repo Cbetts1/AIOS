@@ -1,0 +1,7 @@
+# AURA OS — Dependencies
+# Core: no mandatory dependencies (pure Python 3.8+)
+#
+# Optional — uncomment as needed:
+# flask>=2.0               # Web UI (aura ui web)
+# llama-cpp-python>=0.2    # Local AI inference with GGUF models
+# psutil>=5.9              # Enhanced memory / process tracking

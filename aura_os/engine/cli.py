@@ -132,4 +132,61 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------ shell
     subparsers.add_parser("shell", help="Launch the AURA interactive shell")
 
+    # ------------------------------------------------------------------ help
+    subparsers.add_parser("help", help="Show all available commands")
+
+    # ------------------------------------------------------------------ fs
+    fs_p = subparsers.add_parser("fs", help="File system operations")
+    fs_sub = fs_p.add_subparsers(dest="fs_command", metavar="<fs-command>")
+    fs_sub.required = True
+
+    fs_ls = fs_sub.add_parser("ls", help="List files / directories")
+    fs_ls.add_argument("path", nargs="?", default=".", help="Directory to list")
+
+    fs_cat = fs_sub.add_parser("cat", help="Print file contents")
+    fs_cat.add_argument("file", help="File to display")
+
+    fs_find = fs_sub.add_parser("find", help="Search for files")
+    fs_find.add_argument("root", nargs="?", default=".", help="Root directory")
+    fs_find.add_argument("pattern", nargs="?", default="", help="Filename pattern")
+
+    fs_mkdir = fs_sub.add_parser("mkdir", help="Create directory")
+    fs_mkdir.add_argument("path", help="Directory path to create")
+
+    fs_rm = fs_sub.add_parser("rm", help="Delete file or directory")
+    fs_rm.add_argument("path", help="Path to delete")
+
+    fs_edit = fs_sub.add_parser("edit", help="Open file in text editor")
+    fs_edit.add_argument("file", help="File to edit")
+
+    # ------------------------------------------------------------------ repo
+    repo_p = subparsers.add_parser("repo", help="Git repository management")
+    repo_sub = repo_p.add_subparsers(dest="repo_command", metavar="<repo-command>")
+    repo_sub.required = True
+
+    repo_create = repo_sub.add_parser("create", help="Create a new git repository")
+    repo_create.add_argument("name", help="Repository name")
+
+    repo_sub.add_parser("list", help="List managed repositories")
+
+    repo_status = repo_sub.add_parser("status", help="Show git status")
+    repo_status.add_argument("path", nargs="?", default=".", help="Repository path")
+
+    repo_clone = repo_sub.add_parser("clone", help="Clone a remote repository")
+    repo_clone.add_argument("url", help="Repository URL")
+    repo_clone.add_argument("dest", nargs="?", default=None, help="Destination name")
+
+    # ------------------------------------------------------------------ auto
+    auto_p = subparsers.add_parser("auto", help="Task automation")
+    auto_sub = auto_p.add_subparsers(dest="auto_command", metavar="<auto-command>")
+    auto_sub.required = True
+
+    auto_sub.add_parser("list", help="List automation tasks")
+
+    auto_create = auto_sub.add_parser("create", help="Create a task template")
+    auto_create.add_argument("name", help="Task name")
+
+    auto_run = auto_sub.add_parser("run", help="Execute a task")
+    auto_run.add_argument("name", help="Task name to execute")
+
     return parser

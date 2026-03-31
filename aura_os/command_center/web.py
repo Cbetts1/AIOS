@@ -150,7 +150,10 @@ def _html_response(handler: BaseHTTPRequestHandler, html: str) -> None:
 def _read_body(handler: BaseHTTPRequestHandler) -> dict:
     length = int(handler.headers.get("Content-Length", 0))
     raw = handler.rfile.read(length) if length else b"{}"
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return {}
 
 
 # ── request handler ─────────────────────────────────────────────────
@@ -320,7 +323,7 @@ def _chat(prompt: str) -> dict:
         full = f"[System: {persona.build_system_prompt()}]\nUser: {prompt}\nAura:"
         response = inference.query(full)
         return {"response": response}
-    except Exception as exc:
+    except Exception:
         return {"response": (
             "I'm not connected to an AI backend right now.  "
             "Install ollama to unlock my full potential."

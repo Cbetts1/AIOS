@@ -6,9 +6,23 @@ import sys
 
 
 def _bootstrap():
-    """Ensure AURA_HOME is set before importing other modules."""
+    """Ensure AURA_HOME is set before importing other modules.
+
+    Portable mode: when a ``.aura_portable`` marker sits next to the
+    package directory (i.e. the repository / USB root) AURA_HOME is
+    resolved relative to that root so the entire installation is
+    self-contained.
+    """
     if "AURA_HOME" not in os.environ:
-        os.environ["AURA_HOME"] = os.path.expanduser("~/.aura")
+        # Look for a portable marker next to the package directory
+        pkg_dir = os.path.dirname(os.path.abspath(__file__))   # aura_os/
+        root_dir = os.path.dirname(pkg_dir)                     # repo root
+        marker = os.path.join(root_dir, ".aura_portable")
+        if os.path.isfile(marker):
+            os.environ["AURA_HOME"] = os.path.join(root_dir, ".aura")
+            os.environ["AURA_PORTABLE"] = "1"
+        else:
+            os.environ["AURA_HOME"] = os.path.expanduser("~/.aura")
 
 
 def _build_router():
@@ -76,7 +90,11 @@ def _run_shell(eal):
     syslog.info("shell", "Interactive shell started")
 
     prompt = "aura> "
-    print("AURA OS shell — type 'help' for commands, 'exit' to quit.")
+    portable = os.environ.get("AURA_PORTABLE") == "1"
+    banner = "AURA OS shell"
+    if portable:
+        banner += " [portable]"
+    print(f"{banner} — type 'help' for commands, 'exit' to quit.")
     while True:
         try:
             # Update prompt with cwd

@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 from . import detector
 from .adapters.android import AndroidAdapter
 from .adapters.linux import LinuxAdapter
+from .adapters.macos import MacOSAdapter
 from .adapters.fallback import FallbackAdapter
 
 
@@ -30,6 +31,8 @@ class EAL:
         """Pick the best adapter for the detected platform."""
         if self._platform in ("termux", "android"):
             return AndroidAdapter()
+        if self._platform == "macos":
+            return MacOSAdapter()
         if self._platform == "linux":
             return LinuxAdapter()
         return FallbackAdapter()

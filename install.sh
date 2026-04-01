@@ -3,6 +3,11 @@
 #
 # Idempotent: safe to run multiple times.
 # Supports: Linux, macOS, Android/Termux
+#
+# Usage:
+#   ./install.sh              Install to ~/.aura (standard)
+#   ./install.sh --portable   Create a self-contained portable tree next to
+#                              this script (USB stick / SD card)
 
 set -e
 
@@ -20,6 +25,17 @@ info()    { printf "${CYAN}[aura]${NC}  %s\n" "$*"; }
 success() { printf "${GREEN}[aura]${NC}  %s\n" "$*"; }
 warn()    { printf "${YELLOW}[aura]${NC}  %s\n" "$*" >&2; }
 error()   { printf "${RED}[aura]${NC}  ERROR: %s\n" "$*" >&2; exit 1; }
+
+##############################################################################
+# CLI flags
+##############################################################################
+
+PORTABLE=0
+for arg in "$@"; do
+    case "$arg" in
+        --portable) PORTABLE=1 ;;
+    esac
+done
 
 ##############################################################################
 # Environment detection
@@ -69,7 +85,16 @@ info "Using Python ${PYTHON_VERSION} at $(command -v "$PYTHON")"
 # Paths
 ##############################################################################
 
-AURA_HOME="${AURA_HOME:-${HOME}/.aura}"
+# Script's own directory (works even when sourced or run from another dir)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+if [ "$PORTABLE" -eq 1 ]; then
+    AURA_HOME="${SCRIPT_DIR}/.aura"
+    info "Portable mode: AURA_HOME → ${AURA_HOME}"
+else
+    AURA_HOME="${AURA_HOME:-${HOME}/.aura}"
+fi
+
 AURA_BIN="${AURA_HOME}/bin"
 AURA_LIB="${AURA_HOME}/lib"
 AURA_DATA="${AURA_HOME}/data"
@@ -79,14 +104,11 @@ AURA_MODELS="${AURA_HOME}/models"
 AURA_CONFIG="${AURA_HOME}/config"
 AURA_IPC="${AURA_HOME}/ipc"
 
-# Script's own directory (works even when sourced or run from another dir)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-
 ##############################################################################
 # Create directory structure
 ##############################################################################
 
-info "Creating ~/.aura directory structure…"
+info "Creating AURA_HOME directory structure at ${AURA_HOME}…"
 for dir in "$AURA_BIN" "$AURA_LIB" "$AURA_DATA" "$AURA_LOGS" \
            "$AURA_PKG/installed" "$AURA_MODELS" "$AURA_CONFIG" "$AURA_IPC"; do
     mkdir -p "$dir"
@@ -164,8 +186,14 @@ else
 fi
 
 ##############################################################################
-# PATH configuration
+# PATH configuration (standard mode only)
 ##############################################################################
+
+if [ "$PORTABLE" -eq 1 ]; then
+    # Drop a marker so the entry script detects portable mode
+    touch "${SCRIPT_DIR}/.aura_portable"
+    info "Portable marker created at ${SCRIPT_DIR}/.aura_portable"
+else
 
 add_to_path() {
     local profile_file="$1"
@@ -197,6 +225,8 @@ fi
 
 add_to_path "$PROFILE"
 
+fi   # end standard-mode PATH block
+
 ##############################################################################
 # Done
 ##############################################################################
@@ -204,9 +234,18 @@ add_to_path "$PROFILE"
 echo ""
 success "AURA OS installation complete!"
 echo ""
-info "To start using aura right now, run:"
-printf "    ${CYAN}export PATH=\"\${HOME}/.aura/bin:\${PATH}\"${NC}\n"
-printf "    ${CYAN}aura --help${NC}\n"
-echo ""
-info "Or start a new shell session for PATH changes to take effect."
+
+if [ "$PORTABLE" -eq 1 ]; then
+    info "Portable installation lives entirely under: ${SCRIPT_DIR}"
+    info "To run AURA, execute:"
+    printf "    ${CYAN}${SCRIPT_DIR}/aura --help${NC}\n"
+    echo ""
+    info "Copy the entire directory to a USB stick or SD card and run from there."
+else
+    info "To start using aura right now, run:"
+    printf "    ${CYAN}export PATH=\"\${HOME}/.aura/bin:\${PATH}\"${NC}\n"
+    printf "    ${CYAN}aura --help${NC}\n"
+    echo ""
+    info "Or start a new shell session for PATH changes to take effect."
+fi
 echo ""

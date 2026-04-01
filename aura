@@ -1,16 +1,35 @@
 #!/usr/bin/env bash
 # aura — AURA OS entry point
 #
-# Sets AURA_HOME (defaulting to ~/.aura) and delegates to the Python module.
+# Portable: if a '.aura_portable' marker exists next to this script the
+# runtime data directory (AURA_HOME) is kept alongside the script so the
+# whole tree can live on a USB stick, SD card, or any removable media.
+# Otherwise AURA_HOME defaults to ~/.aura.
 
 set -e
 
-# Determine AURA_HOME
+# Resolve the directory that contains *this* script (works with symlinks)
+SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
+while [ -L "$SCRIPT_SOURCE" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+    SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+    # Resolve relative symlinks
+    [[ "$SCRIPT_SOURCE" != /* ]] && SCRIPT_SOURCE="$SCRIPT_DIR/$SCRIPT_SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+
+# ---------- Portable mode detection ----------
+# A file named '.aura_portable' next to this script activates portable mode.
 if [ -z "${AURA_HOME}" ]; then
-    export AURA_HOME="${HOME}/.aura"
+    if [ -f "${SCRIPT_DIR}/.aura_portable" ]; then
+        export AURA_HOME="${SCRIPT_DIR}/.aura"
+        export AURA_PORTABLE=1
+    else
+        export AURA_HOME="${HOME}/.aura"
+    fi
 fi
 
-# Locate python3
+# ---------- Locate python3 ----------
 PYTHON=""
 for candidate in python3 python; do
     if command -v "$candidate" >/dev/null 2>&1; then
@@ -24,10 +43,15 @@ if [ -z "$PYTHON" ]; then
     exit 1
 fi
 
-# Prefer the installed library copy if it exists
+# ---------- Module discovery ----------
+# 1. The library copy installed under AURA_HOME/lib (install.sh)
+# 2. The source tree sitting next to this script (dev / portable)
 LIB_DIR="${AURA_HOME}/lib"
 if [ -d "${LIB_DIR}" ]; then
     export PYTHONPATH="${LIB_DIR}:${PYTHONPATH:-}"
+fi
+if [ -d "${SCRIPT_DIR}/aura_os" ]; then
+    export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH:-}"
 fi
 
 exec "$PYTHON" -m aura_os.main "$@"

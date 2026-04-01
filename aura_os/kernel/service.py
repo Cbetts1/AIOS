@@ -73,7 +73,9 @@ class ServiceManager:
     # ------------------------------------------------------------------
 
     def _manifest_path(self, name: str) -> str:
-        safe = name.replace("/", "_").replace("..", "__")
+        safe = os.path.basename(name)
+        if not safe or safe in (".", ".."):
+            raise ValueError(f"Invalid service name: {name!r}")
         return os.path.join(self._dir, f"{safe}.json")
 
     def _load_manifests(self):

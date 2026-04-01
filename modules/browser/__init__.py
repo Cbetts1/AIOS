@@ -45,7 +45,11 @@ class BrowserModule:
         def api_files():
             path = request.args.get("path", str(self._aura_home))
             try:
-                entries = self.adapter.list_dir(path)
+                resolved = Path(path).resolve()
+                storage_resolved = self._aura_home.resolve()
+                if not resolved.is_relative_to(storage_resolved):
+                    return jsonify({"error": "Access denied"}), 403
+                entries = self.adapter.list_dir(resolved)
                 return jsonify([{"name": n, "is_dir": d} for n, d in entries])
             except Exception as e:
                 return jsonify({"error": str(e)}), 400

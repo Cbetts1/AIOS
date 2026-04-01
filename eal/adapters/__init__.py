@@ -3,6 +3,7 @@ EAL Adapter: Base class shared by all environment adapters.
 """
 
 import os
+import shlex
 import subprocess
 import shutil
 from pathlib import Path
@@ -72,10 +73,11 @@ class BaseAdapter:
         Execute *cmd* (list or string).
         Returns (returncode, stdout, stderr).
         """
+        if isinstance(cmd, str):
+            cmd = shlex.split(cmd)
         try:
             result = subprocess.run(
                 cmd,
-                shell=isinstance(cmd, str),
                 capture_output=capture,
                 text=True,
                 timeout=timeout,
@@ -90,9 +92,10 @@ class BaseAdapter:
 
     def run_bg(self, cmd, cwd=None):
         """Start *cmd* in the background and return the Popen object."""
+        if isinstance(cmd, str):
+            cmd = shlex.split(cmd)
         return subprocess.Popen(
             cmd,
-            shell=isinstance(cmd, str),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             cwd=cwd,

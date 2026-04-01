@@ -1,84 +1,67 @@
-"""``aura net`` command handler — networking operations."""
-
-import json
+"""Network management command handler for AURA OS."""
 
 
 class NetCommand:
-    """Networking operations: ping, dns, http, scan, ifconfig."""
+    """Handles the ``net`` sub-command."""
 
     def execute(self, args, eal) -> int:
-        from aura_os.kernel.network import NetworkManager
+        from aura_os.net import NetworkManager
 
-        net = NetworkManager()
-        sub = getattr(args, "net_command", None)
+        nm = NetworkManager()
+        sub = args.net_command
 
-        if sub == "ping":
-            host = getattr(args, "host", "8.8.8.8")
-            result = net.ping(host)
-            if result["reachable"]:
-                print(f"  ✓ {host} reachable  ({result['latency_ms']} ms)")
-            else:
-                print(f"  ✗ {host} unreachable")
-            return 0
-
-        if sub == "dns":
-            hostname = getattr(args, "hostname", "")
-            result = net.dns_lookup(hostname)
-            if result["addresses"]:
-                print(f"  {hostname} → {', '.join(result['addresses'])}")
-            else:
-                print(f"  DNS lookup failed: {result.get('error', 'unknown')}")
-            return 0
-
-        if sub == "get":
-            url = getattr(args, "url", "")
-            result = net.http_get(url)
-            if result["error"]:
-                print(f"  Error: {result['error']}")
-                return 1
-            print(f"  Status: {result['status']}")
-            print(result["body"][:2000])
-            return 0
-
-        if sub == "download":
-            url = getattr(args, "url", "")
-            dest = getattr(args, "dest", "download")
-            result = net.download(url, dest)
-            if result["ok"]:
-                print(f"  ✓ Downloaded {result['size']} bytes → {result['path']}")
-            else:
-                print(f"  ✗ Download failed: {result['error']}")
-            return 0
-
-        if sub == "scan":
-            host = getattr(args, "host", "localhost")
-            results = net.port_scan(host)
-            open_ports = [r for r in results if r["open"]]
-            if open_ports:
-                for r in open_ports:
-                    svc = r["service"] or "unknown"
-                    print(f"  {r['port']:>5}  open  ({svc})")
-            else:
-                print("  No open ports found")
-            return 0
-
+        if sub == "status":
+            return self._status(nm)
         if sub == "ifconfig":
-            info = net.interfaces()
-            print(f"  Hostname : {info['hostname']}")
-            print(f"  FQDN     : {info['fqdn']}")
-            print(f"  Local IP : {info['local_ip']}")
-            online = net.is_online(timeout=3)
-            print(f"  Online   : {'yes' if online else 'no'}")
-            return 0
+            return self._ifconfig(nm)
+        if sub == "ping":
+            return self._ping(nm, args)
+        if sub == "dns":
+            return self._dns(nm, args)
+        print(f"net: unknown sub-command '{sub}'")
+        return 1
 
-        # Default: show network status
-        info = net.interfaces()
-        online = net.is_online(timeout=3)
-        print("─" * 50)
-        print("  AURA OS — Network Status")
-        print("─" * 50)
-        print(f"  Hostname : {info['hostname']}")
-        print(f"  Local IP : {info['local_ip']}")
-        print(f"  Online   : {'yes' if online else 'no'}")
-        print()
+    # ------------------------------------------------------------------
+
+    def _status(self, nm) -> int:
+        connected = nm.check_connectivity()
+        hostname = nm.get_hostname()
+        gateway = nm.get_default_gateway() or "unknown"
+        status = "connected" if connected else "disconnected"
+        print(f"  Status:   {status}")
+        print(f"  Hostname: {hostname}")
+        print(f"  Gateway:  {gateway}")
+        return 0
+
+    def _ifconfig(self, nm) -> int:
+        ifaces = nm.list_interfaces()
+        if not ifaces:
+            print("  (no interfaces found)")
+            return 0
+        for iface in ifaces:
+            status = "UP" if iface.get("is_up") else "DOWN"
+            addrs = ", ".join(iface.get("addresses", [])) or "no address"
+            print(f"  {iface['name']:<15} {status:<6}  {addrs}")
+        return 0
+
+    def _ping(self, nm, args) -> int:
+        host = args.host
+        count = getattr(args, "count", 4)
+        result = nm.ping(host, count=count)
+        if result.get("success"):
+            recv = result["packets_received"]
+            sent = result["packets_sent"]
+            avg = result.get("avg_ms", 0.0)
+            print(f"  PING {host}: {recv}/{sent} received, avg {avg:.1f} ms")
+        else:
+            print(f"  PING {host}: failed — host unreachable or ping not available")
+        return 0 if result.get("success") else 1
+
+    def _dns(self, nm, args) -> int:
+        addresses = nm.dns_lookup(args.hostname)
+        if not addresses:
+            print(f"  dns: could not resolve '{args.hostname}'")
+            return 1
+        for addr in addresses:
+            print(f"  {addr}")
         return 0

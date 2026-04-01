@@ -63,6 +63,19 @@ def _setup_termux_boot(aura_home: Path, adapter):
         pass
 
 
+def _init_vfs(aura_home: Path):
+    """Initialize the virtual FHS under aura_home/data/."""
+    try:
+        import sys as _sys
+        repo_root = str(aura_home.parent) if aura_home.name == ".aura" else str(Path(__file__).resolve().parent.parent)
+        if repo_root not in _sys.path:
+            _sys.path.insert(0, repo_root)
+        from aura_os.fs.fhs import VirtualFHS
+        VirtualFHS(base_dir=str(aura_home / "data"))
+    except Exception:
+        pass
+
+
 def run_bootstrap(aura_home: Path = None):
     """
     Full bootstrap sequence.
@@ -83,6 +96,9 @@ def run_bootstrap(aura_home: Path = None):
 
     # 2. Create directory structure
     _ensure_dirs(aura_home)
+
+    # 3. Initialize virtual FHS
+    _init_vfs(aura_home)
 
     # 3. Write default config
     _write_default_config(aura_home, env_map)

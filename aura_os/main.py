@@ -408,7 +408,11 @@ def _run_shell(eal):
                 print("Usage: head <file> [n]")
             else:
                 path = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
-                n = int(parts[2]) if len(parts) > 2 else 10
+                try:
+                    n = int(parts[2]) if len(parts) > 2 else 10
+                except ValueError:
+                    print(f"head: invalid count: {parts[2]}")
+                    continue
                 try:
                     with open(path, "r", encoding="utf-8") as fh:
                         for i, line_text in enumerate(fh):
@@ -424,7 +428,11 @@ def _run_shell(eal):
                 print("Usage: tail <file> [n]")
             else:
                 path = os.path.join(cwd, parts[1]) if not os.path.isabs(parts[1]) else parts[1]
-                n = int(parts[2]) if len(parts) > 2 else 10
+                try:
+                    n = int(parts[2]) if len(parts) > 2 else 10
+                except ValueError:
+                    print(f"tail: invalid count: {parts[2]}")
+                    continue
                 try:
                     with open(path, "r", encoding="utf-8") as fh:
                         all_lines = fh.readlines()

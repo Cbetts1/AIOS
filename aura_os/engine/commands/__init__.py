@@ -5,5 +5,15 @@ from .ai import AiCommand
 from .env_cmd import EnvCommand
 from .pkg import PkgCommand
 from .sys_cmd import SysCommand
+from .net_cmd import NetCommand
+from .notify_cmd import NotifyCommand
+from .cron_cmd import CronCommand
+from .clip_cmd import ClipCommand
+from .plugin_cmd import PluginCommand
+from .secret_cmd import SecretCommand
 
-__all__ = ["RunCommand", "AiCommand", "EnvCommand", "PkgCommand", "SysCommand"]
+__all__ = [
+    "RunCommand", "AiCommand", "EnvCommand", "PkgCommand", "SysCommand",
+    "NetCommand", "NotifyCommand", "CronCommand", "ClipCommand",
+    "PluginCommand", "SecretCommand",
+]

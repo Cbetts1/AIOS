@@ -23,6 +23,12 @@ def _build_router():
     from aura_os.engine.commands.kill_cmd import KillCommand
     from aura_os.engine.commands.service_cmd import ServiceCommand
     from aura_os.engine.commands.log_cmd import LogCommand
+    from aura_os.engine.commands.net_cmd import NetCommand
+    from aura_os.engine.commands.notify_cmd import NotifyCommand
+    from aura_os.engine.commands.cron_cmd import CronCommand
+    from aura_os.engine.commands.clip_cmd import ClipCommand
+    from aura_os.engine.commands.plugin_cmd import PluginCommand
+    from aura_os.engine.commands.secret_cmd import SecretCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -34,6 +40,12 @@ def _build_router():
     router.register("kill", KillCommand)
     router.register("service", ServiceCommand)
     router.register("log", LogCommand)
+    router.register("net", NetCommand)
+    router.register("notify", NotifyCommand)
+    router.register("cron", CronCommand)
+    router.register("clip", ClipCommand)
+    router.register("plugin", PluginCommand)
+    router.register("secret", SecretCommand)
     return router
 
 
@@ -589,6 +601,12 @@ def _print_shell_help():
     run <file>        Run a script
     ai <prompt>       Query AI assistant
     proc [path]       Read virtual /proc files
+    net <cmd>         Networking (ping/dns/get/download/scan/ifconfig)
+    notify <cmd>      Notifications (send/list/read/clear)
+    cron <cmd>        Periodic tasks (add/remove/list/enable/disable)
+    clip <cmd>        Clipboard (copy/paste/history/clear)
+    plugin <cmd>      Plugin system (scan/load/unload/create)
+    secret <cmd>      Secret store (set/get/delete/list/namespaces)
 
   Shell Features:
     cmd1 | cmd2       Pipe output between commands

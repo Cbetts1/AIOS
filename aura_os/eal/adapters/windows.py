@@ -51,7 +51,7 @@ class WindowsAdapter:
                 cmd,
                 capture_output=capture,
                 text=True,
-                # CREATE_NO_WINDOW prevents console popups on Windows
+                # Suppress spawning a new console window for the subprocess
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             return result.returncode, result.stdout or "", result.stderr or ""

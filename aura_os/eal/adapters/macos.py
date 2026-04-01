@@ -115,9 +115,9 @@ class MacOSAdapter:
                 total_kb = total_bytes // 1024
                 return {
                     "total_kb": total_kb,
-                    "available_kb": 0,  # macOS doesn't expose this easily
-                    "used_kb": 0,
-                    "percent": 0.0,
+                    "available_kb": 0,  # not available via sysctl
+                    "used_kb": 0,       # not available via sysctl
+                    "percent": 0.0,     # not available via sysctl
                 }
         except (OSError, ValueError):
             pass

@@ -55,11 +55,19 @@ class AIModule:
         """Search for a .gguf model file in known locations."""
         storage_root = Path(self.env.get("storage_root", Path.home() / ".aura"))
         aura_home = Path(os.environ.get("AURA_HOME", Path.home() / ".aura"))
-        search_dirs = [
+        candidates = [
             storage_root / "models",
             aura_home / "models",
             Path.home() / ".aura" / "models",
         ]
+        # Deduplicate while preserving order
+        seen = set()
+        search_dirs = []
+        for d in candidates:
+            resolved = d.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                search_dirs.append(d)
         for d in search_dirs:
             if d.is_dir():
                 for f in sorted(d.glob("*.gguf")):

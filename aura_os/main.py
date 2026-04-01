@@ -23,6 +23,9 @@ def _build_router():
     from aura_os.engine.commands.kill_cmd import KillCommand
     from aura_os.engine.commands.service_cmd import ServiceCommand
     from aura_os.engine.commands.log_cmd import LogCommand
+    from aura_os.engine.commands.user_cmd import UserCommand
+    from aura_os.engine.commands.net_cmd import NetCommand
+    from aura_os.engine.commands.init_cmd import InitCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -34,6 +37,9 @@ def _build_router():
     router.register("kill", KillCommand)
     router.register("service", ServiceCommand)
     router.register("log", LogCommand)
+    router.register("user", UserCommand)
+    router.register("net", NetCommand)
+    router.register("init", InitCommand)
     return router
 
 
@@ -221,9 +227,48 @@ def _run_shell(eal):
             print(getpass.getuser())
             continue
 
+        if cmd == "id":
+            import getpass
+            user = getpass.getuser()
+            uid = os.getuid() if hasattr(os, "getuid") else 0
+            gid = os.getgid() if hasattr(os, "getgid") else 0
+            print(f"uid={uid}({user}) gid={gid}")
+            continue
+
         if cmd == "hostname":
             import platform as plat
             print(plat.node())
+            continue
+
+        if cmd == "ifconfig":
+            from aura_os.net import NetworkManager
+            nm = NetworkManager()
+            for iface in nm.list_interfaces():
+                status = "UP" if iface.get("is_up") else "DOWN"
+                addrs = ", ".join(iface.get("addresses", [])) or "no address"
+                print(f"  {iface['name']:<15} {status:<6}  {addrs}")
+            continue
+
+        if cmd == "ping":
+            if len(parts) < 2:
+                print("Usage: ping <host> [-c count]")
+            else:
+                from aura_os.net import NetworkManager
+                host = parts[1]
+                count = 4
+                if "-c" in parts:
+                    idx = parts.index("-c")
+                    if idx + 1 < len(parts):
+                        try:
+                            count = int(parts[idx + 1])
+                        except ValueError:
+                            pass
+                nm = NetworkManager()
+                result = nm.ping(host, count=count)
+                if result.get("success"):
+                    print(f"  PING {host}: {result['packets_received']}/{result['packets_sent']} received, avg {result.get('avg_ms', 0):.1f} ms")
+                else:
+                    print(f"  PING {host}: failed — host unreachable or ping not available")
             continue
 
         if cmd == "date":
@@ -581,6 +626,9 @@ def _print_shell_help():
     run <file>        Run a script
     ai <prompt>       Query AI assistant
     proc [path]       Read virtual /proc files
+    user <cmd>        User management (add/del/list/whoami/passwd)
+    net <cmd>         Network management (status/ifconfig/ping/dns)
+    init <cmd>        Init system (status/boot/shutdown)
 
   Shell Features:
     cmd1 | cmd2       Pipe output between commands

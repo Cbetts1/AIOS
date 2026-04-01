@@ -132,4 +132,56 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------ shell
     subparsers.add_parser("shell", help="Launch the AURA interactive shell")
 
+    # ------------------------------------------------------------------ user
+    user_p = subparsers.add_parser("user", help="User management")
+    user_sub = user_p.add_subparsers(dest="user_command", metavar="<user-command>")
+    user_sub.required = True
+
+    user_sub.add_parser("list", help="List all users")
+    user_sub.add_parser("whoami", help="Show current user")
+
+    user_add = user_sub.add_parser("add", help="Add a new user")
+    user_add.add_argument("username", help="Username")
+    user_add.add_argument("--password", default=None, help="Password (prompted if omitted)")
+    user_add.add_argument(
+        "--role", default="user", choices=["root", "user", "guest"],
+        help="User role",
+    )
+
+    user_del = user_sub.add_parser("del", help="Delete a user")
+    user_del.add_argument("username", help="Username to delete")
+
+    user_passwd = user_sub.add_parser("passwd", help="Change a user's password")
+    user_passwd.add_argument("username", help="Username")
+
+    user_info = user_sub.add_parser("info", help="Show user details")
+    user_info.add_argument("username", help="Username")
+
+    # ------------------------------------------------------------------ net
+    net_p = subparsers.add_parser("net", help="Network management")
+    net_sub = net_p.add_subparsers(dest="net_command", metavar="<net-command>")
+    net_sub.required = True
+
+    net_sub.add_parser("status", help="Show network status")
+    net_sub.add_parser("ifconfig", help="List network interfaces")
+
+    net_ping = net_sub.add_parser("ping", help="Ping a host")
+    net_ping.add_argument("host", help="Hostname or IP to ping")
+    net_ping.add_argument(
+        "-c", "--count", type=int, default=4,
+        help="Number of pings (default 4)",
+    )
+
+    net_dns = net_sub.add_parser("dns", help="DNS lookup")
+    net_dns.add_argument("hostname", help="Hostname to resolve")
+
+    # ------------------------------------------------------------------ init
+    init_p = subparsers.add_parser("init", help="Init system management")
+    init_sub = init_p.add_subparsers(dest="init_command", metavar="<init-command>")
+    init_sub.required = True
+
+    init_sub.add_parser("status", help="Show init unit status")
+    init_sub.add_parser("boot", help="Run boot sequence")
+    init_sub.add_parser("shutdown", help="Run shutdown sequence")
+
     return parser

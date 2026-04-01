@@ -119,9 +119,8 @@ class TestTrackContextManager(unittest.TestCase):
         with tracker.track("unit_test"):
             _ = list(range(1000))
 
-    def test_track_prints_output(self, ):
+    def test_track_prints_output(self):
         tracker = MemoryTracker()
-        import io
         from contextlib import redirect_stdout
         buf = io.StringIO()
         with redirect_stdout(buf):

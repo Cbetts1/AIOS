@@ -1,5 +1,7 @@
 """``aura secret`` command handler — secret/credential management."""
 
+import sys
+
 
 class SecretCommand:
     """Secret store management: set, get, delete, list."""
@@ -24,7 +26,9 @@ class SecretCommand:
             ns = getattr(args, "namespace", "default")
             value = ss.get_secret(key, namespace=ns)
             if value is not None:
-                print(value)
+                # Write directly to stdout to avoid logging the secret
+                sys.stdout.write(value + "\n")
+                sys.stdout.flush()
             else:
                 print(f"  ✗ Secret '{key}' not found in [{ns}]")
                 return 1

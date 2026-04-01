@@ -37,9 +37,11 @@ class SecretStore:
         self._dir = base_dir or os.path.join(aura_home, "secrets")
         os.makedirs(self._dir, exist_ok=True)
         self._lock = threading.Lock()
-        # Derive key material
+        # Derive key material using a proper KDF
         raw = passphrase or f"{os.uname().nodename}:{aura_home}"
-        self._key = hashlib.sha256(raw.encode()).digest()
+        self._key = hashlib.pbkdf2_hmac(
+            "sha256", raw.encode(), b"aura-os-secrets-salt", iterations=100_000
+        )
 
     # ------------------------------------------------------------------
     # Encryption helpers

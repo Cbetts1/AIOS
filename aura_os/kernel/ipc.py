@@ -28,7 +28,9 @@ class IPCChannel:
     # ------------------------------------------------------------------
 
     def _channel_path(self, channel: str) -> str:
-        safe = channel.replace("/", "_").replace("..", "__")
+        safe = os.path.basename(channel)
+        if not safe or safe in (".", ".."):
+            raise ValueError(f"Invalid IPC channel name: {channel!r}")
         return os.path.join(self._base_dir, f"{safe}.jsonl")
 
     def _get_lock(self, channel: str) -> threading.Lock:

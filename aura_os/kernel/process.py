@@ -65,8 +65,8 @@ class ProcessManager:
 
         proc = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE if background else None,
-            stderr=subprocess.PIPE if background else None,
+            stdout=subprocess.DEVNULL if background else None,
+            stderr=subprocess.DEVNULL if background else None,
         )
 
         entry = ProcessEntry(

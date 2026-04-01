@@ -5,12 +5,14 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import threading
 from datetime import datetime, timezone
 from typing import Optional
 
 _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
 _VALID_ROLES = {"root", "user", "guest"}
+_PBKDF2_ITERATIONS = 260_000
 
 
 class UserManager:
@@ -31,8 +33,25 @@ class UserManager:
     def _user_path(self, username: str) -> str:
         return os.path.join(self._base, f"{username}.json")
 
-    def _hash(self, password: str) -> str:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    def _hash(self, password: str, salt: str = None) -> str:
+        """Return ``{salt_hex}:{pbkdf2_hex}`` using PBKDF2-HMAC-SHA256."""
+        if salt is None:
+            salt = secrets.token_hex(16)
+        dk = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(salt),
+            _PBKDF2_ITERATIONS,
+        )
+        return f"{salt}:{dk.hex()}"
+
+    def _verify(self, password: str, stored: str) -> bool:
+        """Verify *password* against a stored ``salt:hash`` value."""
+        try:
+            salt, _ = stored.split(":", 1)
+            return secrets.compare_digest(self._hash(password, salt), stored)
+        except Exception:
+            return False
 
     def _validate_username(self, username: str):
         if not _USERNAME_RE.match(username):
@@ -108,7 +127,7 @@ class UserManager:
         record = self.get_user(username)
         if record is None:
             return False
-        return record.get("password_hash") == self._hash(password)
+        return self._verify(password, record.get("password_hash", ""))
 
     def set_password(self, username: str, old_password: str, new_password: str) -> bool:
         """Change password; returns True on success, False if old password is wrong."""
@@ -116,7 +135,7 @@ class UserManager:
             record = self.get_user(username)
             if record is None:
                 raise KeyError(f"User '{username}' not found.")
-            if record.get("password_hash") != self._hash(old_password):
+            if not self._verify(old_password, record.get("password_hash", "")):
                 return False
             record["password_hash"] = self._hash(new_password)
             with open(self._user_path(username), "w", encoding="utf-8") as fh:

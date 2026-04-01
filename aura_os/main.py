@@ -26,6 +26,11 @@ def _build_router():
     from aura_os.engine.commands.user_cmd import UserCommand
     from aura_os.engine.commands.net_cmd import NetCommand
     from aura_os.engine.commands.init_cmd import InitCommand
+    from aura_os.engine.commands.cron_cmd import CronCommand
+    from aura_os.engine.commands.clip_cmd import ClipCommand
+    from aura_os.engine.commands.notify_cmd import NotifyCommand
+    from aura_os.engine.commands.plugin_cmd import PluginCommand
+    from aura_os.engine.commands.secret_cmd import SecretCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -40,6 +45,11 @@ def _build_router():
     router.register("user", UserCommand)
     router.register("net", NetCommand)
     router.register("init", InitCommand)
+    router.register("cron", CronCommand)
+    router.register("clip", ClipCommand)
+    router.register("notify", NotifyCommand)
+    router.register("plugin", PluginCommand)
+    router.register("secret", SecretCommand)
     return router
 
 
@@ -63,7 +73,7 @@ def _run_shell(eal):
     aliases = {}
     cwd = os.getcwd()
 
-    # Try to enable readline history
+    # Try to enable readline history and tab completion
     try:
         import readline
         import atexit
@@ -76,6 +86,24 @@ def _run_shell(eal):
         except OSError:
             pass
         atexit.register(readline.write_history_file, history_path)
+
+        # Tab completion: AURA commands + shell builtins
+        _aura_commands = sorted(router._handlers.keys())
+        _shell_builtins = [
+            "cd", "pwd", "ls", "cat", "head", "tail", "mkdir", "rm", "touch",
+            "cp", "mv", "wc", "grep", "which", "export", "set", "unset",
+            "alias", "unalias", "echo", "history", "clear", "whoami", "id",
+            "hostname", "date", "uname", "uptime", "ifconfig", "ping",
+            "proc", "help", "exit", "quit", "jobs",
+        ]
+        _completions = _aura_commands + _shell_builtins
+
+        def _completer(text, state):
+            matches = [c for c in _completions if c.startswith(text)]
+            return matches[state] if state < len(matches) else None
+
+        readline.set_completer(_completer)
+        readline.parse_and_bind("tab: complete")
     except ImportError:
         pass
 
@@ -637,6 +665,11 @@ def _print_shell_help():
     user <cmd>        User management (add/del/list/whoami/passwd)
     net <cmd>         Network management (status/ifconfig/ping/dns)
     init <cmd>        Init system (status/boot/shutdown)
+    cron <cmd>        Cron jobs (list/add/remove/enable/disable)
+    clip <cmd>        Clipboard (copy/paste/history/clear)
+    notify <cmd>      Notifications (send/list/read/clear)
+    plugin <cmd>      Plugins (list/scan/load/unload/create)
+    secret <cmd>      Secrets (set/get/delete/list/namespaces)
 
   Shell Features:
     cmd1 | cmd2       Pipe output between commands

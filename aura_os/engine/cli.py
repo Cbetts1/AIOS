@@ -175,6 +175,10 @@ def build_parser() -> argparse.ArgumentParser:
     net_dns = net_sub.add_parser("dns", help="DNS lookup")
     net_dns.add_argument("hostname", help="Hostname to resolve")
 
+    net_dl = net_sub.add_parser("download", help="Download a file")
+    net_dl.add_argument("url", help="URL to download")
+    net_dl.add_argument("dest", help="Destination path")
+
     # ------------------------------------------------------------------ init
     init_p = subparsers.add_parser("init", help="Init system management")
     init_sub = init_p.add_subparsers(dest="init_command", metavar="<init-command>")
@@ -183,5 +187,102 @@ def build_parser() -> argparse.ArgumentParser:
     init_sub.add_parser("status", help="Show init unit status")
     init_sub.add_parser("boot", help="Run boot sequence")
     init_sub.add_parser("shutdown", help="Run shutdown sequence")
+
+    # ------------------------------------------------------------------ cron
+    cron_p = subparsers.add_parser("cron", help="Cron job scheduling")
+    cron_sub = cron_p.add_subparsers(dest="cron_command", metavar="<cron-command>")
+
+    cron_sub.add_parser("list", help="List cron jobs")
+
+    cron_add = cron_sub.add_parser("add", help="Add a new cron job")
+    cron_add.add_argument("name", help="Job name")
+    cron_add.add_argument("--schedule", required=True, help="Cron schedule expression")
+    cron_add.add_argument("--cmd", required=True, dest="cmd", help="Command to run")
+
+    cron_remove = cron_sub.add_parser("remove", help="Remove a cron job")
+    cron_remove.add_argument("id", help="Job ID")
+
+    cron_enable = cron_sub.add_parser("enable", help="Enable a cron job")
+    cron_enable.add_argument("id", help="Job ID")
+
+    cron_disable = cron_sub.add_parser("disable", help="Disable a cron job")
+    cron_disable.add_argument("id", help="Job ID")
+
+    # ------------------------------------------------------------------ clip
+    clip_p = subparsers.add_parser("clip", help="Clipboard management")
+    clip_sub = clip_p.add_subparsers(dest="clip_command", metavar="<clip-command>")
+
+    clip_copy = clip_sub.add_parser("copy", help="Copy text to clipboard")
+    clip_copy.add_argument("text", help="Text to copy")
+
+    clip_sub.add_parser("paste", help="Paste from clipboard")
+
+    clip_hist = clip_sub.add_parser("history", help="Show clipboard history")
+    clip_hist.add_argument(
+        "-n", "--limit", type=int, default=10, help="Max entries to show (default: 10)",
+    )
+
+    clip_sub.add_parser("clear", help="Clear clipboard history")
+
+    # ------------------------------------------------------------------ notify
+    notify_p = subparsers.add_parser("notify", help="Notification management")
+    notify_sub = notify_p.add_subparsers(dest="notify_command", metavar="<notify-command>")
+
+    notify_send = notify_sub.add_parser("send", help="Send a notification")
+    notify_send.add_argument("title", help="Notification title")
+    notify_send.add_argument("--body", default="", help="Notification body")
+    notify_send.add_argument(
+        "--level", default="info",
+        help="Notification level: info, warning, warn, error, success (default: info)",
+    )
+
+    notify_list = notify_sub.add_parser("list", help="List notifications")
+    notify_list.add_argument(
+        "--unread", action="store_true", help="Show only unread notifications",
+    )
+
+    notify_read = notify_sub.add_parser("read", help="Mark a notification as read")
+    notify_read.add_argument("id", help="Notification ID")
+
+    notify_sub.add_parser("clear", help="Clear all notifications")
+
+    # ------------------------------------------------------------------ plugin
+    plugin_p = subparsers.add_parser("plugin", help="Plugin management")
+    plugin_sub = plugin_p.add_subparsers(dest="plugin_command", metavar="<plugin-command>")
+
+    plugin_sub.add_parser("list", help="List installed plugins")
+    plugin_sub.add_parser("scan", help="Scan for available plugins")
+
+    plugin_load = plugin_sub.add_parser("load", help="Load a plugin")
+    plugin_load.add_argument("name", help="Plugin name")
+
+    plugin_unload = plugin_sub.add_parser("unload", help="Unload a plugin")
+    plugin_unload.add_argument("name", help="Plugin name")
+
+    plugin_create = plugin_sub.add_parser("create", help="Scaffold a new plugin")
+    plugin_create.add_argument("name", help="Plugin name")
+    plugin_create.add_argument("--description", default="", help="Plugin description")
+
+    # ------------------------------------------------------------------ secret
+    secret_p = subparsers.add_parser("secret", help="Secret/credential management")
+    secret_sub = secret_p.add_subparsers(dest="secret_command", metavar="<secret-command>")
+
+    secret_set = secret_sub.add_parser("set", help="Store a secret")
+    secret_set.add_argument("key", help="Secret key")
+    secret_set.add_argument("value", help="Secret value")
+    secret_set.add_argument("--namespace", default="default", help="Namespace (default: default)")
+
+    secret_get = secret_sub.add_parser("get", help="Retrieve a secret")
+    secret_get.add_argument("key", help="Secret key")
+    secret_get.add_argument("--namespace", default="default", help="Namespace (default: default)")
+
+    secret_del = secret_sub.add_parser("delete", help="Delete a secret")
+    secret_del.add_argument("key", help="Secret key")
+    secret_del.add_argument("--namespace", default="default", help="Namespace (default: default)")
+
+    secret_list = secret_sub.add_parser("list", help="List secrets in a namespace")
+    secret_list.add_argument("--namespace", default="default", help="Namespace (default: default)")
+
+    secret_sub.add_parser("namespaces", help="List all namespaces")
 
     return parser

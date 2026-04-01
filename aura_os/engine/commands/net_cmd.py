@@ -18,6 +18,8 @@ class NetCommand:
             return self._ping(nm, args)
         if sub == "dns":
             return self._dns(nm, args)
+        if sub == "download":
+            return self._download(nm, args)
         print(f"net: unknown sub-command '{sub}'")
         return 1
 
@@ -65,3 +67,14 @@ class NetCommand:
         for addr in addresses:
             print(f"  {addr}")
         return 0
+
+    def _download(self, nm, args) -> int:
+        url = args.url
+        dest = args.dest
+        result = nm.download(url, dest)
+        if result.get("ok"):
+            size = result.get("bytes", 0)
+            print(f"  ✓ Downloaded {url} → {dest} ({size} bytes)")
+            return 0
+        print(f"  ✗ Download failed: {result.get('error', 'unknown')}")
+        return 1

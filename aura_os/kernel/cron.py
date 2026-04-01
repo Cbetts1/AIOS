@@ -8,6 +8,7 @@ Extends the basic cooperative scheduler with time-based recurring tasks:
 
 import json
 import os
+import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -245,7 +246,6 @@ class CronScheduler:
 
     def _run_job(self, job: CronJob):
         """Execute a single job and update its metadata."""
-        import subprocess
         try:
             if self._executor:
                 self._executor(job.command)

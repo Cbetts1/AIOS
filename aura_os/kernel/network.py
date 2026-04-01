@@ -191,7 +191,7 @@ class NetworkManager:
             info["fqdn"] = socket.getfqdn()
         except Exception:
             info["fqdn"] = info["hostname"]
-        # Local IPs via a UDP-connect trick (no packets actually sent)
+        # Local IP via a UDP-connect trick (no packets actually sent)
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("192.0.2.1", 80))

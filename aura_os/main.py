@@ -593,6 +593,12 @@ def _print_shell_help():
     run <file>        Run a script
     ai <prompt>       Query AI assistant
     proc [path]       Read virtual /proc files
+    net <cmd>         Networking (ping/dns/get/download/scan/ifconfig)
+    notify <cmd>      Notifications (send/list/read/clear)
+    cron <cmd>        Periodic tasks (add/remove/list/enable/disable)
+    clip <cmd>        Clipboard (copy/paste/history/clear)
+    plugin <cmd>      Plugin system (scan/load/unload/create)
+    secret <cmd>      Secret store (set/get/delete/list/namespaces)
 
   Shell Features:
     cmd1 | cmd2       Pipe output between commands

@@ -1,19 +1,21 @@
-"""Fallback adapter for unknown / minimal POSIX-like environments."""
+"""Fallback adapter for unknown / minimal environments."""
 
 import os
 import subprocess
+import sys
+import tempfile
 from typing import Dict, Optional, Tuple
 
 
 class FallbackAdapter:
-    """Minimal safe adapter that works on any POSIX-like system.
+    """Minimal safe adapter that works on any system.
 
-    Uses Python stdlib only; no assumptions about the host OS beyond POSIX.
+    Uses Python stdlib only; no assumptions about the host OS.
     """
 
     def __init__(self):
         self._home = os.path.expanduser("~")
-        self._tmp = os.environ.get("TMPDIR", os.path.join(self._home, ".cache", "aura", "tmp"))
+        self._tmp = tempfile.gettempdir()
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -24,8 +26,8 @@ class FallbackAdapter:
         return self._home
 
     def get_prefix(self) -> str:
-        """Return a safe prefix path."""
-        return "/usr/local"
+        """Return the Python installation prefix."""
+        return sys.prefix
 
     def get_tmp(self) -> str:
         """Return a temporary directory path."""

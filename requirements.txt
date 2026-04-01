@@ -1,0 +1,14 @@
+# Core — no hard dependencies; AURA OS runs with Python stdlib alone.
+# Optional extras are listed below; install only what you need.
+
+# --- AI inference (optional) ---
+# llama-cpp-python>=0.2.0
+
+# --- Web UI (optional) ---
+# flask>=2.3
+
+# --- Enhanced shell (optional) ---
+# prompt_toolkit>=3.0
+
+# --- Testing ---
+# pytest>=7.0

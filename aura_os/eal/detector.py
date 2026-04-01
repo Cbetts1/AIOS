@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 import sys
+import tempfile
 from typing import Dict, Optional
 
 
@@ -29,16 +30,28 @@ def is_linux() -> bool:
     return sys.platform.startswith("linux")
 
 
+def is_macos() -> bool:
+    """Return True if running on macOS."""
+    return sys.platform == "darwin"
+
+
+def is_windows() -> bool:
+    """Return True if running on Windows."""
+    return sys.platform in ("win32", "cygwin")
+
+
 def get_platform() -> str:
     """Return a normalised platform identifier string."""
     if is_termux():
         return "termux"
     if is_android():
         return "android"
-    if sys.platform == "darwin":
+    if is_macos():
         return "macos"
     if is_linux():
         return "linux"
+    if is_windows():
+        return "windows"
     return "unknown"
 
 
@@ -59,7 +72,7 @@ def get_storage_paths() -> Dict[str, str]:
     if is_termux():
         temp_dir = "/data/data/com.termux/files/usr/tmp"
     else:
-        temp_dir = os.environ.get("TMPDIR", "/tmp")
+        temp_dir = tempfile.gettempdir()
 
     return {
         "home_dir": home_dir,

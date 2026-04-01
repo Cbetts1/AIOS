@@ -4,6 +4,7 @@ Tries to use a local GGUF model via llama-cpp-python if available,
 otherwise falls back to a deterministic rule-based assistant.
 """
 
+import os
 import re
 import json
 import time
@@ -53,10 +54,11 @@ class AIModule:
     def _find_model(self):
         """Search for a .gguf model file in known locations."""
         storage_root = Path(self.env.get("storage_root", Path.home() / ".aura"))
+        aura_home = Path(os.environ.get("AURA_HOME", Path.home() / ".aura"))
         search_dirs = [
             storage_root / "models",
+            aura_home / "models",
             Path.home() / ".aura" / "models",
-            Path("/usr/local/share/aura/models"),
         ]
         for d in search_dirs:
             if d.is_dir():

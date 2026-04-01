@@ -32,6 +32,8 @@ detect_platform() {
         echo "android"
     elif [ "$(uname -s)" = "Darwin" ]; then
         echo "macos"
+    elif grep -qi microsoft /proc/version 2>/dev/null; then
+        echo "wsl"
     else
         echo "linux"
     fi
@@ -187,10 +189,14 @@ add_to_path() {
 # Pick the right shell profile
 if [ "${PLATFORM}" = "termux" ]; then
     PROFILE="${HOME}/.bashrc"
+elif [ "${PLATFORM}" = "macos" ] && [ -f "${HOME}/.zshrc" ]; then
+    PROFILE="${HOME}/.zshrc"
 elif [ -f "${HOME}/.bashrc" ]; then
     PROFILE="${HOME}/.bashrc"
 elif [ -f "${HOME}/.bash_profile" ]; then
     PROFILE="${HOME}/.bash_profile"
+elif [ -f "${HOME}/.zshrc" ]; then
+    PROFILE="${HOME}/.zshrc"
 else
     PROFILE="${HOME}/.profile"
 fi
@@ -207,6 +213,9 @@ echo ""
 info "To start using aura right now, run:"
 printf "    ${CYAN}export PATH=\"\${HOME}/.aura/bin:\${PATH}\"${NC}\n"
 printf "    ${CYAN}aura --help${NC}\n"
+echo ""
+info "Or install with pip for system-wide access:"
+printf "    ${CYAN}pip install .${NC}\n"
 echo ""
 info "Or start a new shell session for PATH changes to take effect."
 echo ""

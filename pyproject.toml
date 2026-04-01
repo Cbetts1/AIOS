@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aura-os"
+version = "0.2.0"
+description = "Adaptive User-space Runtime Architecture — a portable, modular OS-like layer"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+authors = [
+    { name = "AURA OS contributors" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Operating System",
+]
+
+[project.optional-dependencies]
+ai = ["llama-cpp-python>=0.2.0"]
+web = ["flask>=2.3"]
+shell = ["prompt_toolkit>=3.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+aura = "aura_os.main:main"
+
+[tool.setuptools.packages.find]
+include = ["aura_os*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

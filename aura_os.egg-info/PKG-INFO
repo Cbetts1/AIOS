@@ -1,3 +1,32 @@
+Metadata-Version: 2.4
+Name: aura-os
+Version: 0.2.0
+Summary: Adaptive User-space Runtime Architecture — a portable, modular OS-like layer
+Author: AURA OS contributors
+License-Expression: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: System :: Operating System
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Provides-Extra: ai
+Requires-Dist: llama-cpp-python>=0.2.0; extra == "ai"
+Provides-Extra: web
+Requires-Dist: flask>=2.3; extra == "web"
+Provides-Extra: shell
+Requires-Dist: prompt_toolkit>=3.0; extra == "shell"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+
 # AIOS — AURA OS
 
 **Adaptive User-space Runtime Architecture** — a fully portable, modular, offline-first OS-like layer that runs on top of any host (Termux/Android, Linux, macOS, Windows, Docker) and dynamically reconfigures itself based on available capabilities.

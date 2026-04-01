@@ -65,7 +65,12 @@ class BrowserModule:
 
     def _get_html_dashboard(self):
         env = self.env
-        caps = ", ".join(sorted(env.get("capabilities", [])))
+        caps_list = sorted(env.get("capabilities", []))
+        caps_html = (
+            ''.join(f'<span class="badge">{c}</span>' for c in caps_list)
+            if caps_list
+            else '<p class="placeholder">No capabilities detected.</p>'
+        )
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,7 +80,7 @@ class BrowserModule:
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: 'Courier New', monospace; background: #0d1117; color: #c9d1d9; min-height: 100vh; }}
-    header {{ background: #161b22; border-bottom: 1px solid #30363d; padding: 1rem 2rem; }}
+    header {{ background: #161b22; border-bottom: 1px solid #30363d; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }}
     header h1 {{ color: #58a6ff; font-size: 1.4rem; }}
     header p {{ color: #8b949e; font-size: .85rem; margin-top: .2rem; }}
     .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding: 1.5rem; }}
@@ -85,11 +90,25 @@ class BrowserModule:
     .card ul {{ padding-left: 1rem; }}
     .badge {{ display: inline-block; background: #21262d; border: 1px solid #30363d; border-radius: 4px;
               padding: 2px 6px; font-size: .75rem; margin: 2px; color: #58a6ff; }}
+    .placeholder {{ color: #484f58; font-style: italic; font-size: .8rem; padding: .25rem 0; }}
     .cmd-input {{ width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
                   padding: .5rem; border-radius: 4px; font-family: inherit; margin-top: .5rem; }}
+    .cmd-input::placeholder {{ color: #484f58; }}
     .cmd-output {{ margin-top: .5rem; background: #0d1117; border: 1px solid #30363d;
                    border-radius: 4px; padding: .5rem; min-height: 3rem; font-size: .8rem;
-                   white-space: pre-wrap; word-break: break-all; }}
+                   white-space: pre-wrap; word-break: break-all; color: #8b949e; }}
+    .cmd-output.empty {{ color: #484f58; font-style: italic; }}
+    .path-input {{ width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+                   padding: .5rem; border-radius: 4px; font-family: inherit; margin-top: .5rem; }}
+    .path-input::placeholder {{ color: #484f58; }}
+    .file-list {{ margin-top: .5rem; background: #0d1117; border: 1px solid #30363d;
+                  border-radius: 4px; padding: .5rem; min-height: 3rem; font-size: .8rem;
+                  max-height: 10rem; overflow-y: auto; }}
+    .file-list.empty {{ color: #484f58; font-style: italic; }}
+    .file-item {{ padding: 2px 0; cursor: pointer; }}
+    .file-item:hover {{ color: #58a6ff; }}
+    .file-item.dir::before {{ content: "📁 "; }}
+    .file-item.file::before {{ content: "📄 "; }}
     button {{ background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: .3rem .8rem;
               border-radius: 4px; cursor: pointer; font-family: inherit; }}
     button:hover {{ background: #30363d; }}
@@ -97,8 +116,10 @@ class BrowserModule:
 </head>
 <body>
   <header>
-    <h1>⬡ AURA OS</h1>
-    <p>Adaptive User-space Runtime Architecture &mdash; {env.get("env_type", "unknown")} environment</p>
+    <div>
+      <h1>⬡ AURA OS</h1>
+      <p>Adaptive User-space Runtime Architecture &mdash; {env.get("env_type", "unknown")} environment</p>
+    </div>
   </header>
   <div class="grid">
     <div class="card">
@@ -111,7 +132,7 @@ class BrowserModule:
     </div>
     <div class="card">
       <h2>Capabilities</h2>
-      {''.join(f'<span class="badge">{c}</span>' for c in sorted(env.get("capabilities", [])))}
+      {caps_html}
     </div>
     <div class="card">
       <h2>Quick Commands</h2>
@@ -127,14 +148,22 @@ class BrowserModule:
       <h2>Run Command</h2>
       <input class="cmd-input" id="cmd" type="text" placeholder='e.g. echo "Hello AURA"'>
       <button onclick="runCmd()" style="margin-top:.4rem">Run</button>
-      <div class="cmd-output" id="out">Output will appear here…</div>
+      <div class="cmd-output empty" id="out">Output will appear here&hellip;</div>
+    </div>
+    <div class="card">
+      <h2>File Browser</h2>
+      <input class="path-input" id="browse-path" type="text" placeholder="Enter a path, e.g. /home or ~/.aura">
+      <button onclick="browseDir()" style="margin-top:.4rem">Browse</button>
+      <div class="file-list empty" id="file-list">Enter a path above to list files&hellip;</div>
     </div>
   </div>
   <script>
     async function runCmd() {{
-      const cmd = document.getElementById("cmd").value;
+      const cmd = document.getElementById("cmd").value.trim();
       const out = document.getElementById("out");
-      out.textContent = "Running…";
+      if (!cmd) {{ out.textContent = "Please enter a command."; out.className = "cmd-output empty"; return; }}
+      out.textContent = "Running\u2026";
+      out.className = "cmd-output";
       try {{
         const r = await fetch("/api/run", {{
           method: "POST",
@@ -142,12 +171,48 @@ class BrowserModule:
           body: JSON.stringify({{cmd}})
         }});
         const d = await r.json();
-        out.textContent = d.stdout + (d.stderr ? "\\nSTDERR: " + d.stderr : "") || "(no output)";
+        const text = (d.stdout || "") + (d.stderr ? "\\nSTDERR: " + d.stderr : "");
+        out.textContent = text.trim() || "(no output)";
+        out.className = "cmd-output";
       }} catch(e) {{
         out.textContent = "Error: " + e;
+        out.className = "cmd-output";
       }}
     }}
+
+    async function browseDir() {{
+      const path = document.getElementById("browse-path").value.trim();
+      const list = document.getElementById("file-list");
+      if (!path) {{ list.textContent = "Enter a path above to list files\u2026"; list.className = "file-list empty"; return; }}
+      list.textContent = "Loading\u2026";
+      list.className = "file-list";
+      try {{
+        const r = await fetch("/api/files?path=" + encodeURIComponent(path));
+        const entries = await r.json();
+        if (entries.error) {{ list.textContent = "Error: " + entries.error; list.className = "file-list empty"; return; }}
+        if (!entries.length) {{ list.textContent = "(empty directory)"; list.className = "file-list empty"; return; }}
+        list.innerHTML = "";
+        list.className = "file-list";
+        entries.forEach(e => {{
+          const div = document.createElement("div");
+          div.className = "file-item " + (e.is_dir ? "dir" : "file");
+          div.textContent = e.name;
+          if (e.is_dir) {{
+            div.onclick = () => {{
+              document.getElementById("browse-path").value = path.replace(/\\/+$/, "") + "/" + e.name;
+              browseDir();
+            }};
+          }}
+          list.appendChild(div);
+        }});
+      }} catch(err) {{
+        list.textContent = "Error: " + err;
+        list.className = "file-list empty";
+      }}
+    }}
+
     document.getElementById("cmd").addEventListener("keydown", e => {{ if(e.key==="Enter") runCmd(); }});
+    document.getElementById("browse-path").addEventListener("keydown", e => {{ if(e.key==="Enter") browseDir(); }});
   </script>
 </body>
 </html>"""

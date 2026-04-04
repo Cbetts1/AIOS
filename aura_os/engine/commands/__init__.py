@@ -13,9 +13,13 @@ from .cron_cmd import CronCommand
 from .clip_cmd import ClipCommand
 from .plugin_cmd import PluginCommand
 from .secret_cmd import SecretCommand
+from .disk_cmd import DiskCommand
+from .health_cmd import HealthCommand
+from .monitor_cmd import MonitorCommand
 
 __all__ = [
     "RunCommand", "AiCommand", "EnvCommand", "PkgCommand", "SysCommand",
     "UserCommand", "NetCommand", "InitCommand",
     "NotifyCommand", "CronCommand", "ClipCommand", "PluginCommand", "SecretCommand",
+    "DiskCommand", "HealthCommand", "MonitorCommand",
 ]

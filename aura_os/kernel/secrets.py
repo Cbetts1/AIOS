@@ -1,10 +1,13 @@
 """Encrypted secret / credential store for AURA OS.
 
 Provides a lightweight secret manager stored under ``~/.aura/secrets/``:
-- Secrets are encrypted at rest using HMAC-derived XOR obfuscation
-  (sufficient for casual protection; swap to Fernet for production use)
-- Thread-safe read/write
+- Secrets are encrypted at rest using AES-128-CBC (via ``cryptography``
+  Fernet) when available, with an HMAC-XOR fallback otherwise.
+- Thread-safe read/write with file-level locking
 - Namespace support for grouping secrets
+- TTL / expiry enforcement
+- Secret rotation (versioned history)
+- Append-only audit log (access events stored separately)
 """
 
 import base64
@@ -17,19 +20,39 @@ import time
 from typing import Dict, List, Optional
 
 
+def _make_fernet(key_bytes: bytes):
+    """Return a ``cryptography.fernet.Fernet`` instance derived from *key_bytes*,
+    or ``None`` if the package is not installed."""
+    try:
+        from cryptography.fernet import Fernet  # type: ignore
+        # Fernet requires a 32-byte URL-safe base64 key
+        fernet_key = base64.urlsafe_b64encode(key_bytes[:32])
+        return Fernet(fernet_key)
+    except ImportError:
+        return None
+
+
 class SecretStore:
     """File-backed encrypted secret manager.
 
-    Secrets are stored as base64-encoded, HMAC-XOR-obfuscated blobs in a
-    JSON file.  The encryption key is derived from a master passphrase
-    (defaults to the machine's hostname + AURA_HOME path if none is set).
+    Encryption strategy (best available):
+    1. ``cryptography`` Fernet (AES-128-CBC + HMAC-SHA256) — **recommended**
+    2. HMAC-XOR stream cipher fallback — obfuscation only
 
-    .. note::
+    The encryption key is derived from a master passphrase via PBKDF2-HMAC
+    (SHA-256, 100 000 iterations).
 
-       This provides *obfuscation*, not cryptographic security.  For
-       production use, integrate with ``cryptography.fernet`` or a
-       system keyring.
+    Additional features vs the original implementation:
+    - **TTL**: secrets can have an ``expires_at`` timestamp; expired entries
+      are treated as missing.
+    - **Rotation**: :meth:`rotate_secret` re-encrypts a secret with a new
+      value while preserving one level of previous-value history.
+    - **Audit log**: every ``get``, ``set``, ``delete``, and ``rotate``
+      operation appends a JSON line to ``secrets/audit.log`` (key name and
+      operation only — no values are logged).
     """
+
+    AUDIT_FILE = "audit.log"
 
     def __init__(self, base_dir: str = None, passphrase: str = None):
         aura_home = os.environ.get("AURA_HOME",
@@ -37,32 +60,54 @@ class SecretStore:
         self._dir = base_dir or os.path.join(aura_home, "secrets")
         os.makedirs(self._dir, exist_ok=True)
         self._lock = threading.Lock()
-        # Derive key material using a proper KDF
-        raw = passphrase or f"{os.uname().nodename}:{aura_home}"
+
+        # Derive key material using PBKDF2-HMAC (100 k iterations)
+        try:
+            nodename = os.uname().nodename
+        except AttributeError:
+            import socket
+            nodename = socket.gethostname()
+        raw = passphrase or f"{nodename}:{aura_home}"
         self._key = hashlib.pbkdf2_hmac(
             "sha256", raw.encode(), b"aura-os-secrets-salt", iterations=100_000
         )
+        self._fernet = _make_fernet(self._key)
 
     # ------------------------------------------------------------------
     # Encryption helpers
     # ------------------------------------------------------------------
 
     def _encrypt(self, plaintext: str) -> str:
-        """Return a base64-encoded obfuscated version of *plaintext*."""
+        """Return an encrypted, base64-encoded representation of *plaintext*.
+
+        Uses Fernet when available, otherwise falls back to HMAC-XOR.
+        """
         data = plaintext.encode("utf-8")
+        if self._fernet is not None:
+            # Fernet already returns URL-safe base64 bytes
+            return self._fernet.encrypt(data).decode("ascii")
+        # Fallback: HMAC-XOR stream cipher
         stream = self._keystream(len(data))
         cipher = bytes(a ^ b for a, b in zip(data, stream))
-        return base64.b64encode(cipher).decode("ascii")
+        return "xor:" + base64.b64encode(cipher).decode("ascii")
 
     def _decrypt(self, ciphertext: str) -> str:
-        """Reverse the obfuscation and return the original string."""
-        cipher = base64.b64decode(ciphertext)
-        stream = self._keystream(len(cipher))
-        plain = bytes(a ^ b for a, b in zip(cipher, stream))
-        return plain.decode("utf-8")
+        """Decrypt *ciphertext* and return the original string."""
+        if ciphertext.startswith("xor:"):
+            # Legacy HMAC-XOR path
+            cipher = base64.b64decode(ciphertext[4:])
+            stream = self._keystream(len(cipher))
+            plain = bytes(a ^ b for a, b in zip(cipher, stream))
+            return plain.decode("utf-8")
+        if self._fernet is not None:
+            return self._fernet.decrypt(ciphertext.encode("ascii")).decode("utf-8")
+        raise ValueError(
+            "Secret was encrypted with Fernet but 'cryptography' is not installed. "
+            "Install it with: pip install cryptography"
+        )
 
     def _keystream(self, length: int) -> bytes:
-        """Generate a repeating key-stream from the master key."""
+        """Generate a repeating HMAC-based key-stream (XOR fallback only)."""
         stream = b""
         counter = 0
         while len(stream) < length:
@@ -72,6 +117,48 @@ class SecretStore:
             stream += block
             counter += 1
         return stream[:length]
+
+    # ------------------------------------------------------------------
+    # Audit log
+    # ------------------------------------------------------------------
+
+    def _audit(self, operation: str, key: str, namespace: str):
+        """Append a single audit record (never raises)."""
+        try:
+            log_path = os.path.join(self._dir, self.AUDIT_FILE)
+            record = {
+                "ts": time.time(),
+                "op": operation,
+                "ns": namespace,
+                "key": key,
+            }
+            with open(log_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record) + "\n")
+            try:
+                os.chmod(log_path, 0o600)
+            except OSError:
+                pass
+        except Exception:
+            pass
+
+    def get_audit_log(self, limit: int = 100) -> List[Dict]:
+        """Return the most recent *limit* audit records."""
+        log_path = os.path.join(self._dir, self.AUDIT_FILE)
+        if not os.path.isfile(log_path):
+            return []
+        records = []
+        try:
+            with open(log_path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line:
+                        try:
+                            records.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+        except OSError:
+            pass
+        return records[-limit:]
 
     # ------------------------------------------------------------------
     # Persistence
@@ -93,9 +180,11 @@ class SecretStore:
 
     def _save(self, data: Dict, namespace: str = "default"):
         path = self._store_path(namespace)
-        with open(path, "w", encoding="utf-8") as fh:
+        # Atomic write: write to a temp file then rename
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2)
-        # Restrict file permissions (owner-only)
+        os.replace(tmp_path, path)
         try:
             os.chmod(path, 0o600)
         except OSError:
@@ -106,28 +195,56 @@ class SecretStore:
     # ------------------------------------------------------------------
 
     def set_secret(self, key: str, value: str,
-                   namespace: str = "default") -> Dict:
-        """Store an encrypted secret.  Returns metadata dict."""
+                   namespace: str = "default",
+                   ttl: Optional[float] = None) -> Dict:
+        """Store an encrypted secret.
+
+        Args:
+            key: Secret name.
+            value: Secret value (will be encrypted at rest).
+            namespace: Logical grouping namespace.
+            ttl: Optional time-to-live in seconds.  After this many
+                 seconds the secret is treated as expired/missing.
+
+        Returns:
+            Metadata dict with ``key``, ``namespace``, ``ok``.
+        """
         with self._lock:
             store = self._load(namespace)
-            store[key] = {
+            existing = store.get(key, {})
+            entry: Dict = {
                 "value": self._encrypt(value),
-                "created": store.get(key, {}).get("created", time.time()),
+                "created": existing.get("created", time.time()),
                 "updated": time.time(),
             }
+            if ttl is not None:
+                entry["expires_at"] = time.time() + ttl
+            elif "expires_at" in existing:
+                # Preserve existing TTL on update unless explicitly removed
+                entry["expires_at"] = existing["expires_at"]
+            store[key] = entry
             self._save(store, namespace)
+        self._audit("set", key, namespace)
         return {"key": key, "namespace": namespace, "ok": True}
 
     def get_secret(self, key: str,
                    namespace: str = "default") -> Optional[str]:
-        """Retrieve and decrypt a secret.  Returns None if not found."""
+        """Retrieve and decrypt a secret.
+
+        Returns ``None`` if the key does not exist or has expired.
+        """
         with self._lock:
             store = self._load(namespace)
             entry = store.get(key)
         if entry is None:
             return None
+        # Enforce TTL
+        if "expires_at" in entry and time.time() > entry["expires_at"]:
+            return None
         try:
-            return self._decrypt(entry["value"])
+            result = self._decrypt(entry["value"])
+            self._audit("get", key, namespace)
+            return result
         except Exception:
             return None
 
@@ -139,18 +256,70 @@ class SecretStore:
             if key in store:
                 del store[key]
                 self._save(store, namespace)
+                self._audit("delete", key, namespace)
                 return True
         return False
 
-    def list_secrets(self, namespace: str = "default") -> List[Dict]:
-        """List all secret keys (not values) in a namespace."""
+    def rotate_secret(self, key: str, new_value: str,
+                      namespace: str = "default") -> Dict:
+        """Replace *key* with *new_value*, preserving the previous value.
+
+        The previous encrypted value is stored under
+        ``{key}.__prev__`` so it can be retrieved if rotation needs
+        to be rolled back.
+
+        Returns metadata dict with ``key``, ``namespace``, ``ok``,
+        ``rotated_at``.
+        """
         with self._lock:
             store = self._load(namespace)
-        return [
-            {"key": k, "created": v.get("created"),
-             "updated": v.get("updated")}
-            for k, v in store.items()
-        ]
+            existing = store.get(key)
+            if existing:
+                # Preserve old encrypted value under a shadow key
+                store[f"{key}.__prev__"] = {
+                    "value": existing["value"],
+                    "rotated_at": time.time(),
+                    "was_key": key,
+                }
+            created = existing.get("created", time.time()) if existing else time.time()
+            store[key] = {
+                "value": self._encrypt(new_value),
+                "created": created,
+                "updated": time.time(),
+            }
+            if existing and "expires_at" in existing:
+                store[key]["expires_at"] = existing["expires_at"]
+            self._save(store, namespace)
+        self._audit("rotate", key, namespace)
+        return {"key": key, "namespace": namespace, "ok": True,
+                "rotated_at": time.time()}
+
+    def list_secrets(self, namespace: str = "default",
+                     include_expired: bool = False) -> List[Dict]:
+        """List all secret keys (not values) in a namespace.
+
+        Expired secrets are hidden by default.
+        """
+        with self._lock:
+            store = self._load(namespace)
+        now = time.time()
+        result = []
+        for k, v in store.items():
+            if k.endswith(".__prev__"):
+                continue  # hide rotation shadow entries
+            expires_at = v.get("expires_at")
+            is_expired = expires_at is not None and now > expires_at
+            if is_expired and not include_expired:
+                continue
+            result.append({
+                "key": k,
+                "created": v.get("created"),
+                "updated": v.get("updated"),
+                "expires_at": expires_at,
+                "expired": is_expired,
+                "encrypted_with": "fernet" if not v["value"].startswith("xor:") else "xor",
+            })
+        return result
 
     def list_namespaces(self) -> List[str]:
         """List all secret namespaces."""

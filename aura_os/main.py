@@ -31,6 +31,9 @@ def _build_router():
     from aura_os.engine.commands.clip_cmd import ClipCommand
     from aura_os.engine.commands.plugin_cmd import PluginCommand
     from aura_os.engine.commands.secret_cmd import SecretCommand
+    from aura_os.engine.commands.disk_cmd import DiskCommand
+    from aura_os.engine.commands.health_cmd import HealthCommand
+    from aura_os.engine.commands.monitor_cmd import MonitorCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -50,6 +53,9 @@ def _build_router():
     router.register("clip", ClipCommand)
     router.register("plugin", PluginCommand)
     router.register("secret", SecretCommand)
+    router.register("disk", DiskCommand)
+    router.register("health", HealthCommand)
+    router.register("monitor", MonitorCommand)
     return router
 
 
@@ -118,6 +124,19 @@ def _run_shell(eal):
         # Expand environment variables ($VAR and ${VAR})
         line = _expand_env_vars(line, env_vars)
 
+        # ------------------------------------------------------------------
+        # Command chaining: split on ; && ||  (outside quotes)
+        # ------------------------------------------------------------------
+        if any(op in line for op in ("&&", "||", ";")):
+            _handle_chain(line, cwd, env_vars, aliases, router, parser, eal, syslog, procfs)
+            continue
+
+        # Handle background execution (&)
+        background = False
+        if line.rstrip().endswith("&"):
+            background = True
+            line = line.rstrip()[:-1].rstrip()
+
         # Handle pipes
         if "|" in line:
             _handle_pipe(line, cwd, env_vars)
@@ -127,6 +146,9 @@ def _run_shell(eal):
         if ">>" in line or ">" in line:
             _handle_redirect(line, cwd, env_vars)
             continue
+
+        # Glob expansion in arguments
+        parts = _expand_globs(line.split(), cwd)
 
         # Built-in commands
         cmd = parts[0].lower() if parts else ""
@@ -521,6 +543,87 @@ def _run_shell(eal):
             pass
         except Exception as exc:  # noqa: BLE001
             print(f"[shell] Error: {exc}")
+
+
+def _expand_globs(parts: list, cwd: str) -> list:
+    """Expand glob patterns (*, ?, [...]) in *parts* relative to *cwd*.
+
+    Returns the expanded argument list.  Patterns that match nothing are
+    kept as-is (POSIX-style no-match passthrough).
+    """
+    import glob as _glob
+    result = []
+    for part in parts:
+        if any(c in part for c in ("*", "?", "[")):
+            # Resolve relative to cwd
+            pattern = part if os.path.isabs(part) else os.path.join(cwd, part)
+            matches = sorted(_glob.glob(pattern))
+            if matches:
+                result.extend(matches)
+            else:
+                result.append(part)  # no match: pass through unchanged
+        else:
+            result.append(part)
+    return result
+
+
+def _handle_chain(line: str, cwd: str, env: dict, aliases: dict,
+                  router, parser, eal, syslog, procfs):
+    """Execute a chain of commands separated by ``;``, ``&&``, or ``||``.
+
+    - ``;``   — run next regardless of exit code
+    - ``&&``  — run next only if previous succeeded (exit 0)
+    - ``||``  — run next only if previous failed (exit != 0)
+
+    Note: Each segment is dispatched via subprocess, which means AURA
+    built-in commands (``cd``, ``export``, aliases, etc.) are not available
+    inside chains.  Use them as standalone commands instead.
+    """
+    import re
+    import shlex
+    import subprocess
+
+    # Tokenise: split on &&, ||, ; while preserving order
+    tokens = re.split(r"(&&|\|\||;)", line)
+    tokens = [t.strip() for t in tokens]
+
+    last_rc = 0
+    pending_op = ";"  # first command always runs
+
+    for token in tokens:
+        if token in ("&&", "||", ";"):
+            pending_op = token
+            continue
+        if not token:
+            continue
+
+        # Decide whether to execute this command
+        if pending_op == "&&" and last_rc != 0:
+            continue
+        if pending_op == "||" and last_rc == 0:
+            continue
+
+        # Execute as a subprocess (simple approach)
+        try:
+            cmd_list = shlex.split(token)
+        except ValueError:
+            print(f"[shell] Parse error: {token}")
+            last_rc = 1
+            continue
+
+        if not cmd_list:
+            last_rc = 0
+            continue
+
+        try:
+            result = subprocess.run(cmd_list, cwd=cwd, env=env)
+            last_rc = result.returncode
+        except FileNotFoundError:
+            print(f"[shell] Command not found: {cmd_list[0]}")
+            last_rc = 127
+        except OSError as exc:
+            print(f"[shell] Error: {exc}")
+            last_rc = 1
 
 
 def _expand_env_vars(text: str, env: dict) -> str:

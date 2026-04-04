@@ -290,4 +290,44 @@ def build_parser() -> argparse.ArgumentParser:
     init_sub.add_parser("boot", help="Run boot sequence")
     init_sub.add_parser("shutdown", help="Run shutdown sequence")
 
+    # ------------------------------------------------------------------ disk
+    disk_p = subparsers.add_parser("disk", help="Disk usage and filesystem analysis")
+    disk_sub = disk_p.add_subparsers(dest="disk_command", metavar="<disk-command>")
+
+    disk_sub.add_parser("df", help="Show filesystem mount-point usage (like df -h)")
+
+    disk_du = disk_sub.add_parser("du", help="Show directory disk usage")
+    disk_du.add_argument("path", nargs="?", default=".", help="Path to analyse (default: .)")
+    disk_du.add_argument(
+        "-d", "--depth", type=int, default=1,
+        help="Maximum recursion depth (default: 1)",
+    )
+
+    disk_top = disk_sub.add_parser("top", help="List the N largest files under a path")
+    disk_top.add_argument("path", nargs="?", default=".", help="Root path (default: .)")
+    disk_top.add_argument(
+        "-n", "--limit", type=int, default=20,
+        help="Number of results (default: 20)",
+    )
+
+    disk_sub.add_parser("vfs", help="Show AURA VFS sandbox disk usage")
+
+    # ------------------------------------------------------------------ health
+    health_p = subparsers.add_parser("health", help="System health dashboard")
+    health_p.add_argument(
+        "--verbose", "-v", action="store_true",
+        help="Show per-core CPU and top processes",
+    )
+
+    # ------------------------------------------------------------------ monitor
+    monitor_p = subparsers.add_parser("monitor", help="Real-time resource monitor")
+    monitor_p.add_argument(
+        "--interval", "-i", type=float, default=2.0,
+        help="Refresh interval in seconds (default: 2)",
+    )
+    monitor_p.add_argument(
+        "--top", "-n", type=int, default=10,
+        help="Number of top processes to show (default: 10)",
+    )
+
     return parser

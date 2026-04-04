@@ -15,6 +15,7 @@ New capabilities vs the original:
 """
 
 import json
+import os
 import subprocess
 import shutil
 import time
@@ -398,8 +399,6 @@ class LocalInference:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-import os  # noqa: E402  (imported here to avoid circular at module level)
 
 
 class _RetryableError(Exception):

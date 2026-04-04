@@ -12,7 +12,7 @@ Provides a lightweight secret manager stored under ``~/.aura/secrets/``:
 
 import base64
 import hashlib
-import hmac as _hmac
+import hmac
 import json
 import os
 import threading
@@ -111,9 +111,9 @@ class SecretStore:
         stream = b""
         counter = 0
         while len(stream) < length:
-            block = _hmac.new(self._key,
-                              counter.to_bytes(4, "big"),
-                              hashlib.sha256).digest()
+            block = hmac.new(self._key,
+                             counter.to_bytes(4, "big"),
+                             hashlib.sha256).digest()
             stream += block
             counter += 1
         return stream[:length]

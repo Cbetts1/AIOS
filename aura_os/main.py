@@ -574,6 +574,10 @@ def _handle_chain(line: str, cwd: str, env: dict, aliases: dict,
     - ``;``   — run next regardless of exit code
     - ``&&``  — run next only if previous succeeded (exit 0)
     - ``||``  — run next only if previous failed (exit != 0)
+
+    Note: Each segment is dispatched via subprocess, which means AURA
+    built-in commands (``cd``, ``export``, aliases, etc.) are not available
+    inside chains.  Use them as standalone commands instead.
     """
     import re
     import shlex

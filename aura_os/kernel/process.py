@@ -159,7 +159,7 @@ class ProcessManager:
                 if psutil and e.status == "running":
                     try:
                         p = psutil.Process(e.pid)
-                        row["cpu_pct"] = p.cpu_percent(interval=0.1)
+                        row["cpu_pct"] = p.cpu_percent(interval=0)
                         row["mem_rss_mb"] = round(
                             p.memory_info().rss / (1024 * 1024), 2
                         )

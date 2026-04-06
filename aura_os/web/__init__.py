@@ -30,8 +30,8 @@ def _get_status(eal) -> dict:
     """Return the EAL environment info dict."""
     try:
         return eal.get_env_info()
-    except Exception as exc:
-        return {"error": str(exc)}
+    except Exception:
+        return {"error": "Failed to retrieve environment info"}
 
 
 def _get_ps() -> list:
@@ -58,8 +58,8 @@ def _query_ai(prompt: str, model: Optional[str] = None) -> str:
     try:
         from aura_os.ai.inference import LocalInference
         return LocalInference().query(prompt, model=model)
-    except Exception as exc:
-        return f"[aura ai] Error: {exc}"
+    except Exception:
+        return "[aura ai] Error: inference failed"
 
 
 # ---------------------------------------------------------------------------

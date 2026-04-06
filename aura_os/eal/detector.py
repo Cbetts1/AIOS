@@ -37,6 +37,8 @@ def get_platform() -> str:
         return "android"
     if sys.platform == "darwin":
         return "macos"
+    if sys.platform.startswith("win"):
+        return "windows"
     if is_linux():
         return "linux"
     return "unknown"

@@ -1,6 +1,10 @@
 """
 Core File System Manager
 Provides search, navigation, and editing operations via the EAL adapter.
+
+.. deprecated::
+    This legacy ``core/`` package is superseded by ``aura_os/fs/``.
+    New code should import from ``aura_os.fs`` instead.
 """
 
 import os

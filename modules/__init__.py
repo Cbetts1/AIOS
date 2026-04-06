@@ -1,6 +1,10 @@
 """
 AURA OS Modules Package
 Provides dynamic loading utilities for AURA modules.
+
+.. deprecated::
+    This legacy ``modules/`` package is superseded by ``aura_os/kernel/``.
+    New code should import from ``aura_os.kernel`` instead.
 """
 
 import importlib

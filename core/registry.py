@@ -1,6 +1,10 @@
 """
 Core Command Registry
 Stores registered commands, their handlers, and metadata.
+
+.. deprecated::
+    This legacy ``core/`` package is superseded by ``aura_os/engine/``.
+    New code should import from ``aura_os.engine`` instead.
 """
 
 from typing import Callable, Dict, Any, Optional

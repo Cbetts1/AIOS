@@ -34,6 +34,7 @@ def _build_router():
     from aura_os.engine.commands.disk_cmd import DiskCommand
     from aura_os.engine.commands.health_cmd import HealthCommand
     from aura_os.engine.commands.monitor_cmd import MonitorCommand
+    from aura_os.engine.commands.web_cmd import WebCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -56,6 +57,7 @@ def _build_router():
     router.register("disk", DiskCommand)
     router.register("health", HealthCommand)
     router.register("monitor", MonitorCommand)
+    router.register("web", WebCommand)
     return router
 
 
@@ -63,8 +65,12 @@ def _build_router():
 # Enhanced interactive shell
 # ------------------------------------------------------------------
 
-def _run_shell(eal):
-    """Launch an enhanced REPL with built-in shell commands."""
+def _run_shell(eal, script_file=None):
+    """Launch an enhanced REPL with built-in shell commands.
+
+    If *script_file* is provided, commands are read from that file
+    non-interactively instead of prompting for input.
+    """
     from aura_os.engine.cli import build_parser
     from aura_os.kernel.syslog import Syslog
     from aura_os.fs.procfs import ProcFS
@@ -79,32 +85,54 @@ def _run_shell(eal):
     aliases = {}
     cwd = os.getcwd()
 
-    # Try to enable readline history
-    try:
-        import readline
-        import atexit
-        history_path = os.path.expanduser(
-            os.environ.get("AURA_HOME", "~/.aura") + "/data/.history"
-        )
-        os.makedirs(os.path.dirname(history_path), exist_ok=True)
+    # Determine input source: script file or stdin REPL
+    if script_file is not None:
         try:
-            readline.read_history_file(history_path)
-        except OSError:
-            pass
-        atexit.register(readline.write_history_file, history_path)
-    except ImportError:
-        pass
+            with open(script_file, "r", encoding="utf-8") as fh:
+                script_lines = fh.readlines()
+        except OSError as exc:
+            print(f"[aura shell] Cannot read script '{script_file}': {exc}",
+                  file=sys.stderr)
+            return 1
+        syslog.info("shell", f"Running script: {script_file}")
+        input_iter = iter(line.rstrip("\n") for line in script_lines)
+        interactive = False
+    else:
+        input_iter = None
+        interactive = True
 
-    syslog.info("shell", "Interactive shell started")
+    if interactive:
+        # Try to enable readline history
+        try:
+            import readline
+            import atexit
+            history_path = os.path.expanduser(
+                os.environ.get("AURA_HOME", "~/.aura") + "/data/.history"
+            )
+            os.makedirs(os.path.dirname(history_path), exist_ok=True)
+            try:
+                readline.read_history_file(history_path)
+            except OSError:
+                pass
+            atexit.register(readline.write_history_file, history_path)
+        except ImportError:
+            pass
+        syslog.info("shell", "Interactive shell started")
+        print("AURA OS shell — type 'help' for commands, 'exit' to quit.")
 
     prompt = "aura> "
-    print("AURA OS shell — type 'help' for commands, 'exit' to quit.")
     while True:
         try:
-            # Update prompt with cwd
-            short_cwd = cwd.replace(os.path.expanduser("~"), "~")
-            prompt = f"aura:{short_cwd}> "
-            line = input(prompt).strip()
+            if interactive:
+                # Update prompt with cwd
+                short_cwd = cwd.replace(os.path.expanduser("~"), "~")
+                prompt = f"aura:{short_cwd}> "
+                line = input(prompt).strip()
+            else:
+                line = next(input_iter).strip()  # type: ignore[arg-type]
+        except StopIteration:
+            # Script finished
+            break
         except EOFError:
             print()
             break
@@ -791,8 +819,9 @@ def main(argv=None):
     syslog.info("kern", "AURA OS started")
 
     if args.command == "shell":
-        _run_shell(eal)
-        return 0
+        script = getattr(args, "script", None)
+        result = _run_shell(eal, script_file=script)
+        return result if result is not None else 0
 
     if args.command is None:
         parser.print_help()

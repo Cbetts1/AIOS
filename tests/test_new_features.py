@@ -166,17 +166,9 @@ class TestWebCommand(unittest.TestCase):
 
         server = WebServer(eal, host="127.0.0.1", port=free_port)
         t = server.start(background=True)
+        self.assertIsNotNone(t)  # thread was created
         time.sleep(0.3)
-
-        import urllib.request
-        try:
-            resp = urllib.request.urlopen(
-                f"http://127.0.0.1:{free_port}/api/status", timeout=2
-            )
-            data = json.loads(resp.read().decode())
-            self.assertIsInstance(data, dict)
-        except Exception:
-            pass  # Not all CI environments allow loopback HTTP
+        self.assertTrue(t.is_alive(), "Server thread should be running")
 
     def test_web_server_get_status_helper(self):
         from aura_os.web import _get_status

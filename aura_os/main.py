@@ -129,7 +129,7 @@ def _run_shell(eal, script_file=None):
                 prompt = f"aura:{short_cwd}> "
                 line = input(prompt).strip()
             else:
-                line = next(input_iter).strip()  # type: ignore[arg-type]
+                line = next(input_iter).strip()  # type: ignore[union-attr]
         except StopIteration:
             # Script finished
             break

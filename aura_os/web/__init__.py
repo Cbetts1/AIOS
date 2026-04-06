@@ -54,11 +54,21 @@ def _get_log(lines: int = 50) -> list:
 
 
 def _query_ai(prompt: str, model: Optional[str] = None) -> str:
-    """Query the local AI and return the response string."""
+    """Query the local AI and return the response string.
+
+    All exceptions are caught and converted to a generic user-facing message
+    so that no internal stack trace or system path information reaches the caller.
+    """
     try:
-        from aura_os.ai.inference import LocalInference
-        return LocalInference().query(prompt, model=model)
-    except Exception:
+        from aura_os.ai.inference import LocalInference  # noqa: PLC0415
+        response = LocalInference().query(prompt, model=model)
+        # Strip any embedded Python traceback lines before returning
+        safe_lines = [
+            line for line in response.splitlines()
+            if not line.strip().startswith(("Traceback (", "  File ", "    "))
+        ]
+        return "\n".join(safe_lines)
+    except Exception:  # noqa: BLE001
         return "[aura ai] Error: inference failed"
 
 
@@ -146,8 +156,9 @@ class _StdlibHandler:
                     raw = self.rfile.read(length)
                     try:
                         body = json.loads(raw)
-                    except Exception:
-                        body = {}
+                    except (json.JSONDecodeError, ValueError):
+                        self._send_json({"error": "Invalid JSON body"}, 400)
+                        return
                     prompt = body.get("prompt", "")
                     model = body.get("model", None)
                     if not prompt:

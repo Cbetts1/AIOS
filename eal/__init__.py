@@ -1,6 +1,12 @@
 """
 Environment Abstraction Layer (EAL)
 Detects the host environment and provides a unified API for AURA OS modules.
+
+.. deprecated::
+    This legacy ``eal/`` package is superseded by ``aura_os/eal/``.
+    The canonical implementation is at ``aura_os.eal``.
+    This module is retained for backwards compatibility and will be removed
+    in a future release.  New code should import from ``aura_os.eal`` instead.
 """
 
 import os

@@ -329,8 +329,8 @@ class LocalInference:
             )
         except subprocess.TimeoutExpired as exc:
             raise _RetryableError("[aura ai] Ollama timed out.") from exc
-        except OSError as exc:
-            return f"[aura ai] Failed to run ollama: {exc}"
+        except OSError:
+            return "[aura ai] Failed to run ollama: binary not accessible"
 
     def _default_ollama_model_cli(self) -> Optional[str]:
         """Return the first model listed by ``ollama list``."""
@@ -387,8 +387,8 @@ class LocalInference:
             )
         except subprocess.TimeoutExpired as exc:
             raise _RetryableError("[aura ai] llama-cli timed out.") from exc
-        except OSError as exc:
-            return f"[aura ai] Failed to run llama-cli: {exc}"
+        except OSError:
+            return "[aura ai] Failed to run llama-cli: binary not accessible"
 
     def _first_local_model(self) -> Optional[str]:
         """Return the path to the first discovered local model file."""

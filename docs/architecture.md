@@ -2,36 +2,48 @@
 
 ## 1. System Overview
 
-AURA OS (Universal Adaptive User-Space Operating System Layer) is a portable, modular shell operating system implemented in pure Python 3.8+. It runs on top of any POSIX host — Linux, macOS, Android/Termux — and provides a unified CLI with file management, package management, AI inference, a cooperative task scheduler, IPC, and an interactive REPL shell.
+AURA OS (Universal Adaptive User-Space Operating System Layer) is a portable, modular shell operating system implemented in pure Python 3.8+. It runs on top of any host — Linux, macOS, Android/Termux, or Windows — and provides a unified CLI with file management, package management, AI inference, a cooperative task scheduler, IPC, an interactive REPL shell, and an optional web API.
 
-The design principle is *zero mandatory runtime dependencies*: every subsystem degrades gracefully when optional components (psutil, readline, ollama, llama.cpp) are absent.
+The design principle is *zero mandatory runtime dependencies*: every subsystem degrades gracefully when optional components (psutil, readline, ollama, llama.cpp, flask) are absent.
 
 ---
 
 ## 2. Layer Descriptions
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                   CLI / Shell (aura)                  │  ← user-facing
-├──────────────┬───────────────────────────────────────┤
-│  Engine       │  Commands: run · ai · env · pkg · sys │  ← command dispatch
-├──────────────┴───────────────────────────────────────┤
-│  EAL  — Environment Abstraction Layer                 │  ← host adaptation
-│    Detector  │  Adapters: Linux · Android · Fallback  │
-├──────────────┬────────────┬──────────────────────────┤
-│  Kernel       │  FS        │  Pkg  │  AI  │  Config   │  ← core services
-│  scheduler    │  VFS/KV    │  mgr  │  inf │  settings │
-└──────────────┴────────────┴───────────────────────────┘
-         (host OS: Linux / macOS / Android/Termux)
+┌──────────────────────────────────────────────────────────────────┐
+│              CLI / Shell / Web API (aura)                         │  ← user-facing
+├─────────────────┬────────────────────────────────────────────────┤
+│  Engine          │  21 commands: run · ai · env · pkg · sys · ps  │  ← command dispatch
+│                  │  kill · service · log · user · net · init       │
+│                  │  notify · cron · clip · plugin · secret · disk  │
+│                  │  health · monitor · web                         │
+├─────────────────┴────────────────────────────────────────────────┤
+│  EAL  — Environment Abstraction Layer                             │  ← host adaptation
+│    Detector  │  Adapters: Linux · macOS · Android · Windows ·     │
+│              │            Fallback                                 │
+├─────────────────┬──────────────┬──────────────────────────────── ┤
+│  Kernel (12)    │  FS          │  Pkg  │  AI  │  Config  │ Users │  ← core services
+│  scheduler      │  VFS/KV      │  mgr  │  inf │  settings│ mgr   │
+│  memory · ipc   │  procfs/fhs  │       │      │          │       │
+│  process · svc  │              │  Net  │ Init │   Web    │       │
+│  syslog · net   │              │  mgr  │  mgr │   API    │       │
+│  events · cron  │              │       │      │          │       │
+│  clipboard      │              │       │      │          │       │
+│  plugins · secrets             │       │      │          │       │
+└─────────────────┴──────────────┴───────┴──────┴──────────┴───────┘
+         (host OS: Linux / macOS / Android/Termux / Windows)
 ```
 
 ### 2.1 EAL — Environment Abstraction Layer (`aura_os/eal/`)
 
 | Module | Role |
 |---|---|
-| `detector.py` | One-shot detection functions: `get_platform()`, `get_available_binaries()`, `get_storage_paths()`, `get_permissions()` |
-| `adapters/linux.py` | Adapter for standard Linux: paths, pkg-manager detection (`apt`/`dnf`/`pacman`/`zypper`), `/proc` system info |
-| `adapters/android.py` | Adapter for Termux/Android: Termux-specific paths (`/data/data/com.termux/…`), `pkg` package manager |
+| `detector.py` | One-shot detection: `get_platform()` returns `termux`, `android`, `macos`, `linux`, `windows`, or `unknown` |
+| `adapters/linux.py` | Linux: paths, pkg-manager detection (`apt`/`dnf`/`pacman`/`zypper`), `/proc` system info |
+| `adapters/macos.py` | macOS: `sysctl` for memory, `sw_vers` for version, `brew`/`port` pkg manager, Apple Silicon detection |
+| `adapters/android.py` | Termux/Android: Termux-specific paths (`/data/data/com.termux/…`), `pkg` package manager |
+| `adapters/windows.py` | Windows: `winreg` CPU info, `psutil`/`wmic` memory, `winget`/`choco`/`scoop` pkg managers |
 | `adapters/fallback.py` | Minimal POSIX adapter; no host assumptions beyond stdlib |
 | `__init__.py` (EAL) | Selects adapter, exposes unified `read_file`, `write_file`, `run_command`, `get_env_info` API |
 
@@ -46,21 +58,48 @@ The design principle is *zero mandatory runtime dependencies*: every subsystem d
 | `commands/env_cmd.py` | Renders `eal.get_env_info()` as human-readable text or JSON |
 | `commands/pkg.py` | Wraps `PackageManager`; handles install/remove/list/search/info |
 | `commands/sys_cmd.py` | Displays CPU, memory, disk, uptime, process count; `--watch` mode |
+| `commands/ps_cmd.py` | Lists tracked AURA processes from the process table |
+| `commands/kill_cmd.py` | Sends signals to tracked processes |
+| `commands/service_cmd.py` | Service lifecycle: list/start/stop/restart/enable/disable/create |
+| `commands/log_cmd.py` | Syslog: tail/search/clear |
+| `commands/user_cmd.py` | User management: add/del/list/whoami/passwd/info |
+| `commands/net_cmd.py` | Network: status/ifconfig/ping/dns/download |
+| `commands/init_cmd.py` | Init system: status/boot/shutdown |
+| `commands/notify_cmd.py` | Notification queue: send/list/clear |
+| `commands/cron_cmd.py` | Cron scheduler: add/list/remove/enable/disable |
+| `commands/clip_cmd.py` | Clipboard: copy/paste/history/clear |
+| `commands/plugin_cmd.py` | Plugin lifecycle: scan/list/load/unload/reload/create |
+| `commands/secret_cmd.py` | Secret store: set/get/delete/list/namespaces |
+| `commands/disk_cmd.py` | Disk analysis: df/du/top/vfs |
+| `commands/health_cmd.py` | System health dashboard |
+| `commands/monitor_cmd.py` | Real-time resource monitor |
+| `commands/web_cmd.py` | Web API server: starts HTTP REST API on port 7070 |
 
 ### 2.3 Kernel (`aura_os/kernel/`)
 
 | Module | Role |
 |---|---|
-| `scheduler.py` | `Task` dataclass + `Scheduler`; cooperative execution of callables; background-thread support |
+| `scheduler.py` | `Task` dataclass + `Scheduler`; thread-pool execution, timeouts, retries, deferred tasks, cancellation |
 | `memory.py` | `MemoryTracker`: reads `/proc/meminfo` and `resource` module; context-manager for delta tracking |
-| `ipc.py` | `IPCChannel`: JSON-lines file-based message queues under `~/.aura/ipc/` |
+| `ipc.py` | `IPCChannel`: JSON-lines file-based message queues under `~/.aura/ipc/`; hardened channel-name validation |
+| `process.py` | `ProcessManager`: process table for spawned subprocesses; CPU/memory tracking; resource watchdog |
+| `service.py` | `ServiceManager`: long-running background service lifecycle with auto-start and persistence |
+| `syslog.py` | `Syslog`: structured append-only log with severity levels; JSON-lines file format |
+| `network.py` | `NetworkManager`: connectivity checks, HTTP client, DNS, port scanning |
+| `events.py` | `EventBus` + `NotificationManager`: pub/sub event bus and persistent notification queue |
+| `cron.py` | `CronScheduler`: file-backed cron with interval strings and cron-expression support |
+| `clipboard.py` | `ClipboardManager`: cross-platform clipboard (xclip/pbcopy/termux); in-memory fallback + history |
+| `plugins.py` | `PluginManager`: discover/load/unload/hot-reload Python plugins with `activate()`/`deactivate()` hooks |
+| `secrets.py` | `SecretStore`: PBKDF2-derived key, Fernet (AES-128-CBC) encryption; TTL, audit log, rotation |
 
 ### 2.4 Filesystem (`aura_os/fs/`)
 
 | Module | Role |
 |---|---|
-| `vfs.py` | `VirtualFS`: sandboxed filesystem rooted at `~/.aura/data/`; path-traversal protection via `realpath` comparison |
+| `vfs.py` | `VirtualFS`: sandboxed filesystem rooted at `~/.aura/data/`; path-traversal protection |
 | `store.py` | `KVStore`: thread-safe, JSON-file-backed key-value store at `~/.aura/data/store.json` |
+| `procfs.py` | `ProcFS`: virtual `/proc`-like interface for AURA runtime state |
+| `fhs.py` | `VirtualFHS`: virtual directory hierarchy following Linux FHS conventions |
 
 ### 2.5 Package Management (`aura_os/pkg/`)
 
@@ -73,8 +112,8 @@ The design principle is *zero mandatory runtime dependencies*: every subsystem d
 
 | Module | Role |
 |---|---|
-| `model_manager.py` | `ModelManager`: detects runtimes (ollama, llama-cli, ctransformers); lists `.gguf`/`.bin` model files |
-| `inference.py` | `LocalInference`: routes prompts to ollama → llama-cli → instructional fallback |
+| `model_manager.py` | `ModelManager`: detects runtimes (ollama HTTP, ollama CLI, llama-cli, ctransformers); lists model files |
+| `inference.py` | `LocalInference`: routes prompts to ollama → llama-cli → instructional fallback; streaming support |
 
 ### 2.7 Config (`aura_os/config/`)
 
@@ -83,6 +122,31 @@ The design principle is *zero mandatory runtime dependencies*: every subsystem d
 | `defaults.py` | `DEFAULT_CONFIG` dict: canonical defaults for all subsystems |
 | `settings.py` | `Settings` singleton: merges `~/.aura/config/settings.json` with defaults; dot-notation `get`/`set` |
 
+### 2.8 Users (`aura_os/users/`)
+
+| Module | Role |
+|---|---|
+| `manager.py` | `UserManager`: PBKDF2-HMAC-SHA256 (260k iterations) password hashing; constant-time comparison; CRUD |
+
+### 2.9 Network Manager (`aura_os/net/`)
+
+| Module | Role |
+|---|---|
+| `manager.py` | `NetworkManager`: interface listing/stats (psutil/proc/ifconfig), traceroute, port scan, bandwidth estimation |
+
+### 2.10 Init Manager (`aura_os/init/`)
+
+| Module | Role |
+|---|---|
+| `sequence.py` | `InitManager`: systemd-inspired boot sequencer with topological sort, `after`/`requires` dependencies |
+
+### 2.11 Web API (`aura_os/web/`)
+
+| Module | Role |
+|---|---|
+| `__init__.py` | `WebServer`: REST API on port 7070; Flask backend preferred, stdlib `http.server` fallback |
+| REST endpoints | `GET /api/status`, `GET /api/ps`, `GET /api/log`, `POST /api/ai` |
+
 ---
 
 ## 3. Module Interaction
@@ -90,20 +154,24 @@ The design principle is *zero mandatory runtime dependencies*: every subsystem d
 ```
 aura (shell script)
   └─ python3 -m aura_os.main
-       ├─ EAL.__init__()          → detector → adapter
-       ├─ build_parser()          → argparse tree
+       ├─ EAL.__init__()          → detector → adapter (linux/macos/android/windows/fallback)
+       ├─ build_parser()          → argparse tree (21 commands)
        ├─ CommandRouter.dispatch()
        │    └─ XxxCommand.execute(args, eal)
        │         ├─ eal.run_command(...)
        │         ├─ VirtualFS / KVStore
        │         ├─ PackageManager / LocalRegistry
-       │         └─ LocalInference / ModelManager
+       │         ├─ LocalInference / ModelManager
+       │         ├─ UserManager
+       │         ├─ NetworkManager (net/)
+       │         ├─ InitManager
+       │         └─ WebServer
        └─ Settings (singleton, loaded on first access)
 ```
 
 Data flows:
 1. The shell script sets `AURA_HOME` and invokes `python3 -m aura_os.main`.
-2. `main.py` bootstraps `EAL`, which selects an adapter.
+2. `main.py` bootstraps `EAL`, which detects the platform and selects an adapter.
 3. The argparse parser tokenises argv; `CommandRouter` looks up the handler.
 4. Handlers call EAL methods for I/O and subprocess execution, and access core service classes directly.
 5. `Settings` is a singleton — any module can call `Settings().get("key")` and get the merged config.
@@ -163,15 +231,37 @@ Data flows:
 ├── bin/          ← aura entry-point symlink / wrapper
 ├── config/
 │   └── settings.json
+├── cron/
+│   └── jobs.json         ← persisted cron job definitions
 ├── data/
 │   ├── store.json
 │   └── .history
+├── home/
+│   └── <username>/       ← per-user home directories
 ├── ipc/          ← IPCChannel message queues
 ├── lib/
 │   └── aura_os/  ← installed library copy
 ├── logs/
 ├── models/       ← local AI model files (.gguf, .bin)
-└── pkg/
-    ├── installed/
-    └── registry.json
+├── pkg/
+│   ├── installed/
+│   └── registry.json
+├── plugins/      ← plugin directories (each with plugin.json + main.py)
+├── secrets/      ← encrypted secrets (per-namespace JSON files + audit.log)
+└── users/        ← user records (per-user JSON files)
 ```
+
+---
+
+## 7. Legacy Layer
+
+The repository also contains a legacy implementation in the top-level directories:
+
+| Legacy path | Superseded by |
+|---|---|
+| `eal/` | `aura_os/eal/` |
+| `core/` | `aura_os/engine/` |
+| `modules/` | `aura_os/kernel/` |
+| `boot/` | `aura_os/init/` |
+
+These directories are **deprecated** — all new development should target the `aura_os/` package.  They are retained for backwards compatibility and will be removed in a future release.

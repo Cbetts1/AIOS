@@ -1,6 +1,10 @@
 """
 AURA OS Bootstrap / Startup
 Initialises the runtime, creates the directory tree, and launches the system.
+
+.. deprecated::
+    This legacy ``boot/`` package is superseded by ``aura_os/init/``.
+    New code should use ``aura_os.init.sequence.InitManager`` instead.
 """
 
 import os

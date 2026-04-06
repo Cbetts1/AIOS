@@ -28,8 +28,11 @@ class IPCChannel:
     # ------------------------------------------------------------------
 
     def _channel_path(self, channel: str) -> str:
+        # Validate the original channel name before any transformation
+        if not channel or "\x00" in channel or any(ord(c) < 32 for c in channel):
+            raise ValueError(f"Invalid IPC channel name: {channel!r}")
         safe = os.path.basename(channel)
-        if not safe or safe in (".", ".."):
+        if not safe or safe in (".", "..") or safe.startswith("."):
             raise ValueError(f"Invalid IPC channel name: {channel!r}")
         return os.path.join(self._base_dir, f"{safe}.jsonl")
 

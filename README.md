@@ -21,36 +21,59 @@
 
 ## Directory Structure
 
+The canonical implementation lives in `aura_os/`. The top-level `eal/`, `core/`, `modules/`, and `boot/` directories are **deprecated** legacy code retained for backwards compatibility.
+
 ```
 AIOS/
 ├── aura                   ← CLI entry point  (run this)
 ├── install.sh             ← Master installation script
-├── boot/
-│   └── startup.py         ← Bootstrap & initialisation
-├── core/
-│   ├── engine.py          ← Command parser & dispatcher
-│   ├── registry.py        ← Command registry
-│   └── filesystem.py      ← File system manager
-├── eal/
-│   ├── __init__.py        ← Environment detection & adapter factory
-│   └── adapters/
-│       ├── __init__.py    ← BaseAdapter (shared interface)
-│       ├── android.py     ← Termux/Android adapter
-│       ├── linux.py       ← Linux/macOS adapter
-│       └── fallback.py    ← Windows / unknown adapter
-├── modules/
-│   ├── ai/                ← Offline AI assistant
-│   ├── browser/           ← Web UI + terminal dashboard
-│   ├── repo/              ← Git repository management
-│   └── automation/        ← Task runner & workflow engine
+├── pyproject.toml         ← pip-installable package (pip install .)
+│
+├── aura_os/               ← CANONICAL Python package  ★
+│   ├── main.py            ← Primary entry point & interactive shell
+│   ├── eal/               ← Environment Abstraction Layer
+│   │   ├── detector.py    ← Platform detection (linux/macos/android/windows)
+│   │   └── adapters/      ← Linux · macOS · Android · Windows · Fallback
+│   ├── engine/            ← Command dispatch
+│   │   ├── cli.py         ← argparse parser (21 subcommands)
+│   │   ├── router.py      ← CommandRouter
+│   │   └── commands/      ← One file per CLI command
+│   ├── kernel/            ← OS kernel subsystems (12)
+│   │   ├── scheduler.py   ← Thread-pool task scheduler
+│   │   ├── process.py     ← Process table & watchdog
+│   │   ├── service.py     ← Background service manager
+│   │   ├── ipc.py         ← File-based message queues
+│   │   ├── memory.py      ← Memory tracking
+│   │   ├── syslog.py      ← Structured system log
+│   │   ├── network.py     ← Connectivity & HTTP utilities
+│   │   ├── events.py      ← Pub/sub event bus & notifications
+│   │   ├── cron.py        ← Cron scheduler
+│   │   ├── clipboard.py   ← Cross-platform clipboard
+│   │   ├── plugins.py     ← Plugin lifecycle (hot-reload)
+│   │   └── secrets.py     ← Encrypted secret store (Fernet/PBKDF2)
+│   ├── fs/                ← Virtual filesystem (VFS, KVStore, procfs, FHS)
+│   ├── pkg/               ← Package registry & manager
+│   ├── ai/                ← Local AI inference (ollama/llama.cpp)
+│   ├── config/            ← Settings singleton & defaults
+│   ├── users/             ← User management (PBKDF2 auth)
+│   ├── net/               ← Extended network manager
+│   ├── init/              ← Boot/shutdown sequencer
+│   └── web/               ← REST API server (Flask or stdlib fallback)
+│
+├── tests/                 ← pytest suite (530+ tests)
+├── docs/
+│   └── architecture.md    ← Full architecture documentation
 ├── configs/
 │   └── system.json        ← Default configuration
-├── scripts/
-│   ├── refresh_env.sh     ← Re-run environment detection
-│   └── start_web.sh       ← Launch web UI
-├── tests/
-│   └── test_aura.py       ← 52 unit tests
-└── logs/                  ← Runtime logs
+└── scripts/
+    ├── refresh_env.sh     ← Re-run environment detection
+    └── start_web.sh       ← Launch web API (deprecated: use `aura web`)
+
+# Legacy directories (deprecated — do not use in new code):
+# eal/      → superseded by aura_os/eal/
+# core/     → superseded by aura_os/engine/
+# modules/  → superseded by aura_os/kernel/
+# boot/     → superseded by aura_os/init/
 ```
 
 ---
@@ -101,33 +124,66 @@ aura help
 ## Commands
 
 ```
-aura help                  Show all commands
-aura sys info              System information
-aura sys caps              Detected capabilities
-aura env                   Full environment JSON
-aura reload                Re-detect environment
+# System
+aura sys                   Show system status (CPU, memory, disk, uptime)
+aura sys --watch           Continuously refresh system status
+aura env                   Show full environment info
+aura env --json            Output as JSON
+aura health                System health dashboard
+aura monitor               Real-time resource monitor
 
+# Processes & services
+aura ps                    List tracked processes
+aura kill <pid>            Signal a process (default: SIGTERM)
+aura service list          List background services
+aura service start <name>  Start a service
+aura service stop <name>   Stop a service
+
+# Package management
+aura pkg install <name>    Install a package
+aura pkg remove <name>     Remove a package
+aura pkg list              List installed packages
+aura pkg search <query>    Search the registry
+
+# Scripting & AI
 aura run <file>            Run .py / .sh / .js file
-aura ai "<prompt>"         Offline AI assistant
-aura fs ls [path]          List files/directories
-aura fs cat <file>         Print file contents
-aura fs find [path] [pat]  Search for files
-aura fs mkdir <path>       Create directory
-aura fs rm <path>          Delete file or directory
-aura fs edit <file>        Open in text editor
+aura ai "<prompt>"         Query local AI model (ollama/llama.cpp)
+aura shell                 Launch interactive REPL shell
+aura shell --script <file> Execute commands from a script file (non-interactive)
 
-aura repo create <name>    Init a new git repo
-aura repo list             List managed repos
-aura repo status [path]    Show git status
-aura repo clone <url>      Clone remote repo (needs network)
+# Network
+aura net status            Network connectivity status
+aura net ifconfig          List network interfaces
+aura net ping <host>       Ping a host
+aura net dns <hostname>    DNS lookup
 
-aura auto list             List automation tasks
-aura auto create <name>    Create a task template
-aura auto run <name>       Execute a task
+# Users
+aura user add <name>       Add a new user
+aura user del <name>       Delete a user
+aura user list             List all users
+aura user whoami           Show current user
 
-aura ui                    Auto-select UI (web or terminal)
-aura ui web                Launch web UI (http://localhost:7070)
-aura ui term               Launch terminal dashboard
+# Secrets
+aura secret set <key> <val>  Store an encrypted secret
+aura secret get <key>        Retrieve a secret
+aura secret list             List secret keys
+
+# Plugins
+aura plugin scan           Scan for available plugins
+aura plugin load <name>    Load a plugin
+aura plugin reload <name>  Hot-reload a plugin
+aura plugin create <name>  Scaffold a new plugin
+
+# Scheduling
+aura cron add <name> --schedule "*/5 * * * *" --cmd "echo hi"
+aura cron list             List cron jobs
+
+# Other
+aura log tail              Show recent system log
+aura init status           Show boot unit status
+aura disk df               Filesystem usage (like df -h)
+aura web                   Start REST API server (http://localhost:7070)
+aura web --port 8080        Start on a custom port
 ```
 
 ---

@@ -165,7 +165,13 @@ class SecretStore:
     # ------------------------------------------------------------------
 
     def _store_path(self, namespace: str = "default") -> str:
-        safe = namespace.replace("/", "_").replace("..", "__")
+        # Sanitise: allow only alphanumeric, dash, and underscore characters
+        import re as _re
+        if not namespace or "\x00" in namespace:
+            raise ValueError(f"Invalid secret namespace: {namespace!r}")
+        safe = _re.sub(r"[^A-Za-z0-9_-]", "_", namespace)
+        if not safe:
+            raise ValueError(f"Invalid secret namespace: {namespace!r}")
         return os.path.join(self._dir, f"{safe}.json")
 
     def _load(self, namespace: str = "default") -> Dict:

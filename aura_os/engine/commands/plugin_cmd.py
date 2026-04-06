@@ -39,6 +39,15 @@ class PluginCommand:
                 print(f"  ✗ Plugin '{name}' not loaded")
             return 0
 
+        if sub == "reload":
+            name = getattr(args, "name", "")
+            pm.scan()
+            if pm.reload(name):
+                print(f"  ✓ Plugin '{name}' reloaded")
+            else:
+                print(f"  ✗ Failed to reload plugin '{name}'")
+            return 0
+
         if sub == "create":
             name = getattr(args, "name", "")
             desc = getattr(args, "description", "")

@@ -18,7 +18,7 @@ class TestDetector(unittest.TestCase):
     def test_get_platform_returns_string(self):
         platform = detector.get_platform()
         self.assertIsInstance(platform, str)
-        self.assertIn(platform, ("termux", "android", "linux", "macos", "unknown"))
+        self.assertIn(platform, ("termux", "android", "linux", "macos", "windows", "unknown"))
 
     def test_get_available_binaries_returns_dict(self):
         binaries = detector.get_available_binaries()
@@ -116,6 +116,91 @@ class TestEAL(unittest.TestCase):
         info = eal.get_env_info()
         for key in ("platform", "paths", "binaries", "system"):
             self.assertIn(key, info)
+
+
+class TestMacOSAdapter(unittest.TestCase):
+    """Unit tests for MacOSAdapter (always run; no real macOS calls needed)."""
+
+    def setUp(self):
+        from aura_os.eal.adapters.macos import MacOSAdapter
+        self.adapter = MacOSAdapter()
+
+    def test_get_home(self):
+        self.assertEqual(self.adapter.get_home(), os.path.expanduser("~"))
+
+    def test_get_tmp(self):
+        tmp = self.adapter.get_tmp()
+        self.assertIsInstance(tmp, str)
+        self.assertTrue(len(tmp) > 0)
+
+    def test_get_prefix_returns_string(self):
+        prefix = self.adapter.get_prefix()
+        self.assertIsInstance(prefix, str)
+
+    def test_run_command_echo(self):
+        rc, stdout, _ = self.adapter.run_command(["echo", "mac"])
+        self.assertEqual(rc, 0)
+        self.assertIn("mac", stdout)
+
+    def test_run_command_missing(self):
+        rc, _, _ = self.adapter.run_command(["__no_such_binary_xyz__"])
+        self.assertEqual(rc, 127)
+
+    def test_available_pkg_manager_returns_str_or_none(self):
+        mgr = self.adapter.available_pkg_manager()
+        self.assertTrue(mgr is None or isinstance(mgr, str))
+
+    def test_get_system_info_keys(self):
+        info = self.adapter.get_system_info()
+        for key in ("platform", "arch", "cpu_count", "memory"):
+            self.assertIn(key, info)
+        self.assertEqual(info["platform"], "macos")
+
+    def test_get_system_info_memory_dict(self):
+        mem = self.adapter.get_system_info()["memory"]
+        self.assertIsInstance(mem, dict)
+
+
+class TestWindowsAdapter(unittest.TestCase):
+    """Unit tests for WindowsAdapter (always run; no real Windows calls needed)."""
+
+    def setUp(self):
+        from aura_os.eal.adapters.windows import WindowsAdapter
+        self.adapter = WindowsAdapter()
+
+    def test_get_home(self):
+        self.assertEqual(self.adapter.get_home(), os.path.expanduser("~"))
+
+    def test_get_tmp(self):
+        tmp = self.adapter.get_tmp()
+        self.assertIsInstance(tmp, str)
+
+    def test_get_prefix_returns_string(self):
+        prefix = self.adapter.get_prefix()
+        self.assertIsInstance(prefix, str)
+
+    def test_run_command_echo(self):
+        rc, stdout, _ = self.adapter.run_command(["echo", "win"])
+        self.assertEqual(rc, 0)
+        self.assertIn("win", stdout)
+
+    def test_run_command_missing(self):
+        rc, _, _ = self.adapter.run_command(["__no_such_binary_xyz__"])
+        self.assertEqual(rc, 127)
+
+    def test_available_pkg_manager_returns_str_or_none(self):
+        mgr = self.adapter.available_pkg_manager()
+        self.assertTrue(mgr is None or isinstance(mgr, str))
+
+    def test_get_system_info_keys(self):
+        info = self.adapter.get_system_info()
+        for key in ("platform", "arch", "cpu_count", "memory"):
+            self.assertIn(key, info)
+        self.assertEqual(info["platform"], "windows")
+
+    def test_get_system_info_memory_dict(self):
+        mem = self.adapter.get_system_info()["memory"]
+        self.assertIsInstance(mem, dict)
 
 
 if __name__ == "__main__":

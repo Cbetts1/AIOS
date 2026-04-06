@@ -16,10 +16,11 @@ from .secret_cmd import SecretCommand
 from .disk_cmd import DiskCommand
 from .health_cmd import HealthCommand
 from .monitor_cmd import MonitorCommand
+from .web_cmd import WebCommand
 
 __all__ = [
     "RunCommand", "AiCommand", "EnvCommand", "PkgCommand", "SysCommand",
     "UserCommand", "NetCommand", "InitCommand",
     "NotifyCommand", "CronCommand", "ClipCommand", "PluginCommand", "SecretCommand",
-    "DiskCommand", "HealthCommand", "MonitorCommand",
+    "DiskCommand", "HealthCommand", "MonitorCommand", "WebCommand",
 ]

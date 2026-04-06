@@ -130,7 +130,11 @@ def build_parser() -> argparse.ArgumentParser:
     log_sub.add_parser("clear", help="Clear the system log")
 
     # ------------------------------------------------------------------ shell
-    subparsers.add_parser("shell", help="Launch the AURA interactive shell")
+    shell_p = subparsers.add_parser("shell", help="Launch the AURA interactive shell")
+    shell_p.add_argument(
+        "--script", metavar="FILE", default=None,
+        help="Run commands from FILE non-interactively instead of starting a REPL",
+    )
 
     # ------------------------------------------------------------------ user
     user_p = subparsers.add_parser("user", help="User management")
@@ -254,6 +258,9 @@ def build_parser() -> argparse.ArgumentParser:
     plugin_unload = plugin_sub.add_parser("unload", help="Unload a plugin")
     plugin_unload.add_argument("name", help="Plugin name")
 
+    plugin_reload = plugin_sub.add_parser("reload", help="Reload a plugin (hot-reload)")
+    plugin_reload.add_argument("name", help="Plugin name")
+
     plugin_create = plugin_sub.add_parser("create", help="Scaffold a new plugin")
     plugin_create.add_argument("name", help="Plugin name")
     plugin_create.add_argument("--description", default="", help="Plugin description")
@@ -328,6 +335,17 @@ def build_parser() -> argparse.ArgumentParser:
     monitor_p.add_argument(
         "--top", "-n", type=int, default=10,
         help="Number of top processes to show (default: 10)",
+    )
+
+    # ------------------------------------------------------------------ web
+    web_p = subparsers.add_parser("web", help="Start the AURA OS web API server")
+    web_p.add_argument(
+        "--host", default="127.0.0.1",
+        help="Bind address (default: 127.0.0.1)",
+    )
+    web_p.add_argument(
+        "--port", type=int, default=7070,
+        help="Port to listen on (default: 7070)",
     )
 
     return parser

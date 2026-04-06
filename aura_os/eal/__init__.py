@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Tuple
 from . import detector
 from .adapters.android import AndroidAdapter
 from .adapters.linux import LinuxAdapter
+from .adapters.macos import MacOSAdapter
+from .adapters.windows import WindowsAdapter
 from .adapters.fallback import FallbackAdapter
 
 
@@ -32,6 +34,10 @@ class EAL:
             return AndroidAdapter()
         if self._platform == "linux":
             return LinuxAdapter()
+        if self._platform == "macos":
+            return MacOSAdapter()
+        if self._platform == "windows":
+            return WindowsAdapter()
         return FallbackAdapter()
 
     # ------------------------------------------------------------------

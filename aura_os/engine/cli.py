@@ -340,8 +340,8 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------ web
     web_p = subparsers.add_parser("web", help="Start the AURA OS web API server")
     web_p.add_argument(
-        "--host", default="0.0.0.0",
-        help="Bind address (default: 0.0.0.0)",
+        "--host", default="127.0.0.1",
+        help="Bind address (default: 127.0.0.1)",
     )
     web_p.add_argument(
         "--port", type=int, default=7070,

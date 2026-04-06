@@ -301,7 +301,7 @@ class TestShellScriptMode(unittest.TestCase):
 
         eal = MagicMock()
         result = _run_shell(eal, script_file=script_path)
-        self.assertIsNone(result)  # no error
+        self.assertIsNone(result)  # function completes without returning an error code
 
 
 if __name__ == "__main__":

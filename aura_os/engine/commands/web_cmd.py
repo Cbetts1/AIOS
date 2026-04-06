@@ -7,7 +7,7 @@ class WebCommand:
     def execute(self, args, eal) -> int:
         from aura_os.web import WebServer, DEFAULT_PORT
 
-        host = getattr(args, "host", "0.0.0.0")
+        host = getattr(args, "host", "127.0.0.1")
         port = getattr(args, "port", DEFAULT_PORT)
 
         server = WebServer(eal, host=host, port=port)

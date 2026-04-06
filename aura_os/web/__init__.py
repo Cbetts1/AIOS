@@ -18,7 +18,7 @@ import threading
 from typing import Optional
 
 
-DEFAULT_HOST = "0.0.0.0"
+DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 7070
 
 
@@ -56,18 +56,12 @@ def _get_log(lines: int = 50) -> list:
 def _query_ai(prompt: str, model: Optional[str] = None) -> str:
     """Query the local AI and return the response string.
 
-    All exceptions are caught and converted to a generic user-facing message
-    so that no internal stack trace or system path information reaches the caller.
+    All exceptions are caught and a generic message is returned so that
+    no internal stack trace or system path information reaches the caller.
     """
     try:
         from aura_os.ai.inference import LocalInference  # noqa: PLC0415
-        response = LocalInference().query(prompt, model=model)
-        # Strip any embedded Python traceback lines before returning
-        safe_lines = [
-            line for line in response.splitlines()
-            if not line.strip().startswith(("Traceback (", "  File ", "    "))
-        ]
-        return "\n".join(safe_lines)
+        return LocalInference().query(prompt, model=model)
     except Exception:  # noqa: BLE001
         return "[aura ai] Error: inference failed"
 

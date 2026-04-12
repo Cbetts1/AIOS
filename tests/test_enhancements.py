@@ -272,6 +272,7 @@ class TestProcessManagerEnhanced:
         self.pm = ProcessManager()
 
     def test_list_system_processes(self):
+        pytest.importorskip("psutil")
         procs = self.pm.list_system_processes()
         # Should return multiple processes on any real system
         assert len(procs) > 0
@@ -291,6 +292,7 @@ class TestProcessManagerEnhanced:
             assert procs[i]["mem_rss_mb"] >= procs[i + 1]["mem_rss_mb"]
 
     def test_process_tree_self(self):
+        pytest.importorskip("psutil")
         tree = self.pm.get_process_tree(os.getpid())
         assert tree.get("pid") == os.getpid()
         assert "children" in tree

@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aura-os"
+version = "0.2.0"
+description = "AURA OS — Adaptive User-space Runtime Architecture"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "AURA OS" }]
+requires-python = ">=3.8"
+keywords = ["os", "shell", "cli", "terminal", "aura", "aios"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Operating System",
+    "Topic :: System :: Shells",
+    "Topic :: Utilities",
+]
+
+# Zero mandatory runtime deps — everything is optional
+dependencies = []
+
+[project.optional-dependencies]
+# Full featured install
+ai = [
+    "llama-cpp-python>=0.2.0",
+]
+web = [
+    "flask>=2.3",
+]
+system = [
+    "psutil>=5.9",
+]
+crypto = [
+    "cryptography>=41",
+]
+shell = [
+    "readline; sys_platform != 'win32'",
+]
+all = [
+    "flask>=2.3",
+    "psutil>=5.9",
+    "cryptography>=41",
+]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4",
+    "flask>=2.3",
+    "psutil>=5.9",
+    "cryptography>=41",
+]
+
+[project.urls]
+Homepage = "https://github.com/Cbetts1/AIOS"
+"Bug Tracker" = "https://github.com/Cbetts1/AIOS/issues"
+Documentation = "https://github.com/Cbetts1/AIOS/blob/main/docs/architecture.md"
+Source = "https://github.com/Cbetts1/AIOS"
+
+[project.scripts]
+aura = "aura_os.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aura_os*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--tb=short -q"
+
+[tool.coverage.run]
+source = ["aura_os"]
+omit = ["tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

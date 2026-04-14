@@ -35,7 +35,7 @@ AIOS/
 │   │   ├── detector.py    ← Platform detection (linux/macos/android/windows)
 │   │   └── adapters/      ← Linux · macOS · Android · Windows · Fallback
 │   ├── engine/            ← Command dispatch
-│   │   ├── cli.py         ← argparse parser (21 subcommands)
+│   │   ├── cli.py         ← argparse parser (28 subcommands)
 │   │   ├── router.py      ← CommandRouter
 │   │   └── commands/      ← One file per CLI command
 │   ├── kernel/            ← OS kernel subsystems (12)

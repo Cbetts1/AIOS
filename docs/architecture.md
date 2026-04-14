@@ -154,12 +154,15 @@ llama.cpp, flask) are absent.
 |---|---|
 | `sequence.py` | `InitManager`: systemd-inspired boot sequencer with topological sort, `after`/`requires` dependencies |
 
-### 2.11 Web API (`aura_os/web/`)
+### 2.11 Web API & Dashboard (`aura_os/web/`)
 
 | Module | Role |
 |---|---|
-| `__init__.py` | `WebServer`: REST API on port 7070; Flask backend preferred, stdlib `http.server` fallback |
-| REST endpoints | `GET /api/status`, `GET /api/ps`, `GET /api/log`, `POST /api/ai` |
+| `__init__.py` | `WebServer`: REST API + mobile-friendly HTML dashboard on port 7070; Flask backend preferred, stdlib `http.server` fallback |
+| Dashboard | `GET /` — Mobile-responsive HTML dashboard with live CPU/memory/disk metrics, process list, log viewer, and AI assistant |
+| REST endpoints | `GET /api/status`, `GET /api/ps`, `GET /api/log`, `GET /api/health`, `POST /api/ai` |
+
+The dashboard is a single-page HTML+JavaScript app embedded in the Python source — no static file serving required.  It auto-refreshes live system metrics and can be opened on any phone or browser at `http://<host>:7070`.
 
 ### 2.12 Command Center (`aura_os/command_center/`)
 
@@ -172,8 +175,25 @@ llama.cpp, flask) are absent.
 
 | Module | Role |
 |---|---|
-| `repl.py` | `AuraShell`: real interactive REPL backed by the host OS; pipe/redirect/background/alias/script support |
+| `repl.py` | `AuraShell`: real interactive REPL backed by the host OS |
 | `ShellCommand` | `aura shell` — start the interactive shell; `--script FILE` for non-interactive execution |
+
+`AuraShell` built-in commands:
+
+| Category | Commands |
+|---|---|
+| Navigation | `cd`, `pwd`, `ls [-a] [-l]` |
+| File ops | `cat`, `head [-n N]`, `tail [-n N]`, `mkdir`, `rm [-r]`, `touch`, `cp [-r]`, `mv` |
+| Search | `grep [-i] [-n]`, `wc`, `which` |
+| System | `date`, `uname [-a/-r/-m/-n]`, `hostname`, `uptime`, `whoami`, `id`, `ifconfig`, `ping` |
+| Variables | `export`, `set`, `unset`, `echo`, `env` |
+| Shell | `alias`, `unalias`, `history`, `clear`, `source` / `.`, `exit`, `help` |
+| AURA | `aura <cmd>` — delegates to the full command router |
+
+Shell features: pipes (`|`), output redirection (`>`, `>>`), background (`&`),
+command chaining (`;`, `&&`, `||`), glob expansion (`*`, `?`, `[...]`),
+`$VAR` / `${VAR}` expansion, tab completion of file paths and command names
+(requires `readline`), persistent command history saved to `~/.aura/shell_history`.
 
 ### 2.14 Build & Validation (`aura_os/build/`)
 

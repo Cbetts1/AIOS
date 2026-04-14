@@ -15,7 +15,7 @@ Features:
 - Command history (via readline when available)
 - Pipe (|) and output redirection (> / >>) support
 - Script file execution
-- Background jobs (& suffix)
+- Tab completion for file paths (when readline is available)
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import glob as _glob_mod
 import os
 import re
 import shlex
+import shutilol
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +46,10 @@ BANNER = """\
 ║  Type 'exit' or Ctrl-D to quit       ║
 ╚══════════════════════════════════════╝"""
 
+
+# ---------------------------------------------------------------------------
+# AuraShell
+# ---------------------------------------------------------------------------
 
 class AuraShell:
     """Real interactive REPL shell for AURA OS.
@@ -128,7 +133,7 @@ class AuraShell:
     # ------------------------------------------------------------------
 
     def _execute_line(self, line: str) -> None:
-        # Strip inline comments
+        # Strip inline comments (space + # outside quotes — simple heuristic)
         if " #" in line:
             line = line[:line.index(" #")].rstrip()
 
@@ -140,11 +145,11 @@ class AuraShell:
 
         # Background execution
         background = False
-        if line.endswith("&"):
+        if line.rstrip().endswith("&"):
             background = True
-            line = line[:-1].rstrip()
+            line = line.rstrip()[:-1].rstrip()
 
-        # Output redirect: command > file  or  command >> file
+        # Output redirect: command >> file  or  command > file
         redir_append = False
         redir_path: Optional[str] = None
         if ">>" in line:
@@ -161,13 +166,12 @@ class AuraShell:
             return
 
         # Variable assignment: VAR=value
-        if "=" in line and not line.startswith("("):
-            stripped = line.strip()
-            if stripped and not stripped[0].isspace():
-                tokens = stripped.split(None, 1)
-                if tokens and "=" in tokens[0] and tokens[0][0].isalpha():
-                    self._handle_assignment(stripped)
-                    return
+        stripped = line.strip()
+        if stripped and not stripped[0].isspace():
+            tokens_check = stripped.split(None, 1)
+            if tokens_check and "=" in tokens_check[0] and tokens_check[0][0].isalpha():
+                self._handle_assignment(stripped)
+                return
 
         # Execute the single command
         self._run_command(line, redir_path, redir_append, background)
@@ -198,6 +202,30 @@ class AuraShell:
         os.environ[key] = val
 
     # ------------------------------------------------------------------
+    # Command chaining (;, &&, ||)
+    # ------------------------------------------------------------------
+
+    def _run_chain(self, line: str) -> None:
+        """Handle command chains split by ;, &&, ||."""
+        tokens = re.split(r"(&&|\|\||;)", line)
+        tokens = [t.strip() for t in tokens]
+        pending_op = ";"
+        last_rc = 0
+        for token in tokens:
+            if token in ("&&", "||", ";"):
+                pending_op = token
+                continue
+            if not token:
+                continue
+            if pending_op == "&&" and last_rc != 0:
+                continue
+            if pending_op == "||" and last_rc == 0:
+                continue
+            self._execute_line(token)
+            last_rc = self._last_exit_code
+        self._last_exit_code = last_rc
+
+    # ------------------------------------------------------------------
     # Pipe execution
     # ------------------------------------------------------------------
 
@@ -214,6 +242,7 @@ class AuraShell:
                 return
             if not tokens:
                 continue
+            tokens = self._expand_globs(tokens)
             stdout = subprocess.PIPE if not is_last else (
                 self._open_redir(redir_path, redir_append) if redir_path else None
             )
@@ -872,28 +901,134 @@ class AuraShell:
         return f"{code_indicator}{cwd_display} {self._prompt}"
 
     def _expand_vars(self, text: str) -> str:
-        return os.path.expandvars(text)
+        """Expand $VAR and ${VAR} references."""
+        def _replacer(match):
+            var = match.group(1) or match.group(2)
+            return self._env.get(var, os.environ.get(var, ""))
+        return re.sub(r"\$\{(\w+)\}|\$(\w+)", _replacer, text)
+
+    def _expand_globs(self, tokens: List[str]) -> List[str]:
+        """Expand glob patterns in *tokens* relative to the current directory."""
+        result = []
+        for token in tokens:
+            if any(c in token for c in ("*", "?", "[")):
+                pattern = token if os.path.isabs(token) else os.path.join(self._cwd, token)
+                matches = sorted(_glob.glob(pattern))
+                if matches:
+                    result.extend(matches)
+                else:
+                    result.append(token)
+            else:
+                result.append(token)
+        return result
 
     def _open_redir(self, path: Optional[str], append: bool):
         if not path:
             return None
+        full = path if os.path.isabs(path) else os.path.join(self._cwd, path)
         try:
-            return Path(path).open("a" if append else "w", encoding="utf-8")
+            return open(full, "a" if append else "w", encoding="utf-8")
         except OSError as exc:
-            print(f"[shell] Cannot open '{path}': {exc}")
+            print(f"[shell] Cannot open '{full}': {exc}")
             return None
 
+    # ------------------------------------------------------------------
+    # Readline setup (tab completion + history)
+    # ------------------------------------------------------------------
+
     def _setup_readline(self) -> None:
-        readline.set_completer_delims(" \t\n")
+        import atexit
+
+        readline.set_completer_delims(" \t\n;|&><")
+        readline.set_completer(self._completer)
         readline.parse_and_bind("tab: complete")
+
         history_file = os.path.join(self._home, "shell_history")
         try:
             Path(self._home).mkdir(parents=True, exist_ok=True)
             readline.read_history_file(history_file)
         except (FileNotFoundError, OSError):
             pass
-        import atexit
         atexit.register(self._save_history, history_file)
+
+    def _completer(self, text: str, state: int) -> Optional[str]:
+        """Tab-completion: complete paths and built-in/AURA command names."""
+        if state == 0:
+            self._completion_matches = self._compute_completions(text)
+        try:
+            return self._completion_matches[state]
+        except IndexError:
+            return None
+
+    def _compute_completions(self, text: str) -> List[str]:
+        # If text contains a path separator, complete file paths
+        if "/" in text or text.startswith("~") or text.startswith("."):
+            return self._complete_path(text)
+
+        # Get the full line to decide context
+        try:
+            line_buf = readline.get_line_buffer()
+        except Exception:
+            line_buf = text
+
+        stripped = line_buf.lstrip()
+        # First word: complete commands + built-ins
+        if not stripped or stripped == text:
+            return self._complete_command(text)
+
+        # Subsequent words: complete file paths
+        return self._complete_path(text)
+
+    def _complete_path(self, text: str) -> List[str]:
+        """Return file/directory completions for *text*."""
+        expanded = os.path.expanduser(text)
+        if not os.path.isabs(expanded):
+            expanded = os.path.join(self._cwd, expanded)
+
+        if os.path.isdir(expanded) and not text.endswith("/"):
+            # Complete the directory itself
+            return [text + "/"]
+
+        parent = os.path.dirname(expanded)
+        prefix = os.path.basename(expanded)
+        try:
+            entries = os.listdir(parent or self._cwd)
+        except OSError:
+            return []
+
+        matches = []
+        for entry in sorted(entries):
+            if entry.startswith(prefix):
+                full = os.path.join(parent, entry)
+                suffix = "/" if os.path.isdir(full) else ""
+                # Reconstruct with original prefix (preserve relative path)
+                orig_dir = os.path.dirname(text)
+                candidate = (os.path.join(orig_dir, entry) if orig_dir else entry) + suffix
+                matches.append(candidate)
+        return matches
+
+    def _complete_command(self, text: str) -> List[str]:
+        """Return command-name completions for *text*."""
+        builtins = [
+            "cd", "pwd", "ls", "cat", "head", "tail", "mkdir", "rm", "touch",
+            "cp", "mv", "wc", "grep", "which", "echo", "env", "export", "set",
+            "unset", "alias", "unalias", "history", "clear", "date", "uname",
+            "hostname", "uptime", "whoami", "id", "ifconfig", "ping",
+            "source", "exit", "quit", "help", "aura",
+        ]
+        path_cmds = []
+        for directory in os.environ.get("PATH", "").split(os.pathsep):
+            try:
+                for entry in os.listdir(directory):
+                    if entry.startswith(text):
+                        path_cmds.append(entry)
+            except OSError:
+                continue
+
+        all_cmds = sorted(set(
+            [b for b in builtins if b.startswith(text)] + path_cmds
+        ))
+        return all_cmds
 
     def _save_history(self, path: str) -> None:
         try:

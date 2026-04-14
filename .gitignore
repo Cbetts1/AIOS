@@ -6,6 +6,7 @@ __pycache__/
 # Distribution / packaging
 dist/
 build/
+!aura_os/build/
 *.egg-info/
 *.egg
 .eggs/

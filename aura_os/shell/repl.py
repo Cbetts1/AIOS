@@ -372,7 +372,7 @@ class AuraShell:
                 print(f"  {i:4}  {h}")
             return 0
         if cmd in ("clear", "cls"):
-            print("\033[2J\033[H", end="", flush=True)
+            os.system("cls" if os.name == "nt" else "clear")
             return 0
         if cmd == "pwd":
             print(self._cwd)
@@ -436,8 +436,8 @@ class AuraShell:
             return 0
         if cmd == "id":
             user = getpass.getuser()
-            uid = os.getuid() if hasattr(os, "getuid") else 0
-            gid = os.getgid() if hasattr(os, "getgid") else 0
+            uid = os.getuid() if hasattr(os, "getuid") else -1
+            gid = os.getgid() if hasattr(os, "getgid") else -1
             print(f"uid={uid}({user}) gid={gid}")
             return 0
         if cmd == "ifconfig":
@@ -1033,7 +1033,7 @@ class AuraShell:
     def _setup_readline(self) -> None:
         import atexit
 
-        readline.set_completer_delims(" \t\n;|&>")
+        readline.set_completer_delims(" \t\n;|&><")
         readline.set_completer(self._completer)
         readline.parse_and_bind("tab: complete")
 

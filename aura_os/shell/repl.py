@@ -5,31 +5,26 @@ Commands are executed through the host's process manager — no simulation.
 
 Features:
 - Execute any real system command
-- Built-in AURA commands via the engine router
-- Shell variable assignment and expansion (VAR=value)
+- Built-in AURA commands via the engine router (``aura <subcommand>``)
+- 30+ shell built-ins: ls, cat, head, tail, mkdir, rm, touch, cp, mv, wc,
+  grep, which, whoami, id, hostname, date, uname, uptime, ifconfig, ping,
+  cd, pwd, echo, env, export, set, unset, alias, unalias, history, clear
+- Command chaining: ;, &&, ||
+- Shell variable assignment and expansion (VAR=value / $VAR / ${VAR})
+- Glob expansion (*, ?, [...])
 - Command history (via readline when available)
 - Pipe (|) and output redirection (> / >>) support
-- Background jobs (& suffix)
-- Command chaining (;, &&, ||)
-- Glob expansion (* ? [...])
-- cd, export, alias, unalias, history, exit built-ins
-- File-operation built-ins: ls, cat, head, tail, mkdir, rm, touch, cp, mv
-- Search built-ins: grep, wc, which
-- System built-ins: date, uname, hostname, uptime, whoami, id, ifconfig, ping
 - Script file execution
 - Tab completion for file paths (when readline is available)
 """
 
 from __future__ import annotations
 
-import datetime
-import getpass
-import glob as _glob
+import glob as _glob_mod
 import os
-import platform
 import re
 import shlex
-import shutil
+import shutilol
 import subprocess
 import sys
 from pathlib import Path
@@ -61,15 +56,17 @@ class AuraShell:
 
     Args:
         eal: EAL instance for AURA built-in commands.
-        router: CommandRouter for AURA sub-commands.
+        router: CommandRouter for ``aura <subcommand>`` dispatch.
+        parser: argparse ArgumentParser (required alongside *router*).
         prompt: Prompt string (default ``aura> ``).
         home: AURA_HOME path (defaults to ``~/.aura``).
     """
 
-    def __init__(self, eal=None, router=None, prompt: str = "aura> ",
-                 home: Optional[str] = None):
+    def __init__(self, eal=None, router=None, parser=None,
+                 prompt: str = "aura> ", home: Optional[str] = None):
         self._eal = eal
         self._router = router
+        self._parser = parser
         self._prompt = prompt
         self._home = home or os.environ.get("AURA_HOME", os.path.expanduser("~/.aura"))
 
@@ -140,8 +137,9 @@ class AuraShell:
         if " #" in line:
             line = line[:line.index(" #")].rstrip()
 
-        # Command chaining: ; && ||
-        if any(op in line for op in ("&&", "||", ";")):
+        # Command chaining: ;  &&  ||
+        # Must be checked before pipe/redirect so chained commands can use them.
+        if re.search(r"(&&|\|\||;)", line):
             self._run_chain(line)
             return
 
@@ -177,6 +175,24 @@ class AuraShell:
 
         # Execute the single command
         self._run_command(line, redir_path, redir_append, background)
+
+    def _run_chain(self, line: str) -> None:
+        """Execute commands separated by ``;``, ``&&``, or ``||``."""
+        # Split preserving the operators
+        tokens = re.split(r"(&&|\|\||;)", line)
+        tokens = [t.strip() for t in tokens]
+        pending_op = ";"  # first segment always runs
+        for token in tokens:
+            if token in ("&&", "||", ";"):
+                pending_op = token
+                continue
+            if not token:
+                continue
+            if pending_op == "&&" and self._last_exit_code != 0:
+                continue
+            if pending_op == "||" and self._last_exit_code == 0:
+                continue
+            self._execute_line(token)  # recurse — handles all built-ins properly
 
     def _handle_assignment(self, expr: str) -> None:
         key, _, val = expr.partition("=")
@@ -265,7 +281,11 @@ class AuraShell:
         if not tokens:
             return
 
-        tokens = self._expand_globs(tokens)
+        # Glob expansion on arguments (not the command name)
+        if len(tokens) > 1:
+            tokens = [tokens[0]] + self._expand_globs(tokens[1:])
+        else:
+            tokens = self._expand_globs(tokens)
 
         # Resolve alias
         if tokens[0] in self._aliases:
@@ -275,18 +295,164 @@ class AuraShell:
 
         cmd = tokens[0]
 
-        # ---- Shell built-ins ----
-        rc = self._try_builtin(cmd, tokens, redir_path, redir_append)
-        if rc is not None:
-            self._last_exit_code = rc
+        # When a redirect is specified, open the target file so that all
+        # built-in print() output lands in it instead of the terminal.
+        import contextlib
+        if redir_path and not background:
+            redir_fh = self._open_redir(redir_path, redir_append)
+        else:
+            redir_fh = None
+        stdout_ctx = (contextlib.redirect_stdout(redir_fh)
+                      if redir_fh else contextlib.nullcontext())
+
+        # ── Built-in + subprocess dispatch ─────────────────────────────
+        # stdout_ctx redirects print() calls to the redirect file when
+        # the user writes  cmd > file  or  cmd >> file.
+
+        _handled = True  # will be set False if no built-in matches
+
+        with stdout_ctx:
+            if cmd in ("exit", "quit"):
+                code = int(tokens[1]) if len(tokens) > 1 else 0
+                self._last_exit_code = code
+                self._exit_flag = True
+            elif cmd == "cd":
+                self._builtin_cd(tokens[1:])
+            elif cmd == "export":
+                self._builtin_export(tokens[1:])
+            elif cmd == "alias":
+                self._builtin_alias(tokens[1:])
+            elif cmd == "unalias":
+                if len(tokens) > 1:
+                    self._aliases.pop(tokens[1], None)
+            elif cmd == "set":
+                self._builtin_set(tokens[1:])
+            elif cmd == "unset":
+                for name in tokens[1:]:
+                    self._env.pop(name, None)
+                    os.environ.pop(name, None)
+            elif cmd == "history":
+                for i, h in enumerate(self._history[-50:], 1):
+                    print(f"  {i:4}  {h}")
+            elif cmd in ("clear", "cls"):
+                print("\033[2J\033[H", end="")
+            elif cmd == "pwd":
+                print(self._cwd)
+            elif cmd == "echo":
+                print(self._expand_vars(" ".join(tokens[1:])))
+            elif cmd == "env":
+                for k, v in sorted(self._env.items()):
+                    print(f"{k}={v}")
+            elif cmd == "help":
+                self._print_help()
+            # ── File system built-ins ─────────────────────────────────
+            elif cmd == "ls":
+                self._builtin_ls(tokens[1:])
+            elif cmd == "cat":
+                self._builtin_cat(tokens[1:])
+            elif cmd == "head":
+                self._builtin_head(tokens[1:])
+            elif cmd == "tail":
+                self._builtin_tail(tokens[1:])
+            elif cmd == "mkdir":
+                if len(tokens) < 2:
+                    print("Usage: mkdir <dir>")
+                else:
+                    target = self._abspath(tokens[1])
+                    try:
+                        os.makedirs(target, exist_ok=True)
+                        self._last_exit_code = 0
+                    except OSError as exc:
+                        print(f"mkdir: {exc}")
+                        self._last_exit_code = 1
+            elif cmd == "rm":
+                self._builtin_rm(tokens[1:])
+            elif cmd == "touch":
+                if len(tokens) < 2:
+                    print("Usage: touch <file>")
+                else:
+                    target = self._abspath(tokens[1])
+                    try:
+                        Path(target).touch()
+                        self._last_exit_code = 0
+                    except OSError as exc:
+                        print(f"touch: {exc}")
+                        self._last_exit_code = 1
+            elif cmd == "cp":
+                self._builtin_cp(tokens[1:])
+            elif cmd == "mv":
+                self._builtin_mv(tokens[1:])
+            elif cmd == "wc":
+                self._builtin_wc(tokens[1:])
+            elif cmd == "grep":
+                self._builtin_grep(tokens[1:])
+            elif cmd == "which":
+                if len(tokens) < 2:
+                    print("Usage: which <binary>")
+                else:
+                    import shutil as _shutil
+                    found = _shutil.which(tokens[1])
+                    if found:
+                        print(found)
+                        self._last_exit_code = 0
+                    else:
+                        print(f"which: {tokens[1]}: not found")
+                        self._last_exit_code = 1
+            # ── System info built-ins ─────────────────────────────────
+            elif cmd == "whoami":
+                import getpass
+                print(getpass.getuser())
+                self._last_exit_code = 0
+            elif cmd == "id":
+                import getpass
+                user = getpass.getuser()
+                uid = os.getuid() if hasattr(os, "getuid") else 0
+                gid = os.getgid() if hasattr(os, "getgid") else 0
+                print(f"uid={uid}({user}) gid={gid}")
+                self._last_exit_code = 0
+            elif cmd == "hostname":
+                import platform as _plat
+                print(_plat.node())
+                self._last_exit_code = 0
+            elif cmd == "date":
+                import datetime
+                print(datetime.datetime.now().strftime("%a %b %d %H:%M:%S %Z %Y"))
+                self._last_exit_code = 0
+            elif cmd == "uname":
+                import platform as _plat
+                flag = tokens[1] if len(tokens) > 1 else "-s"
+                u = _plat.uname()
+                if flag == "-a":
+                    print(f"{u.system} {u.node} {u.release} {u.version} {u.machine}")
+                elif flag == "-r":
+                    print(u.release)
+                elif flag == "-m":
+                    print(u.machine)
+                elif flag == "-n":
+                    print(u.node)
+                else:
+                    print(u.system)
+                self._last_exit_code = 0
+            elif cmd == "uptime":
+                self._builtin_uptime()
+            elif cmd == "ifconfig":
+                self._builtin_ifconfig()
+            elif cmd == "ping":
+                self._builtin_ping(tokens[1:])
+            # ── AURA router commands ───────────────────────────────────
+            elif self._router and cmd == "aura" and len(tokens) > 1:
+                self._run_aura_command(tokens[1:])
+            else:
+                _handled = False   # fall through to subprocess
+
+        if redir_fh:
+            redir_fh.close()
+
+        if _handled:
             return
 
-        # AURA router commands (e.g. "aura ps")
-        if self._router and cmd == "aura" and len(tokens) > 1:
-            self._run_aura_command(tokens[1:])
-            return
+        # ── Real OS execution (no built-in matched) ───────────────────
 
-        # Real OS execution
         stdout_fh = self._open_redir(redir_path, redir_append) if redir_path else None
         try:
             if background:
@@ -317,10 +483,13 @@ class AuraShell:
                 stdout_fh.close()
 
     def _run_aura_command(self, args: List[str]) -> None:
+        """Dispatch an ``aura <subcommand>`` call via the CLI router."""
+        if not self._router or not self._parser:
+            print("[shell] aura router not available in this shell session")
+            self._last_exit_code = 1
+            return
         try:
-            from aura_os.engine.cli import build_parser
-            parser = build_parser()
-            parsed = parser.parse_args(args)
+            parsed = self._parser.parse_args(args)
             rc = self._router.dispatch(parsed, self._eal)
             self._last_exit_code = rc if isinstance(rc, int) else 0
         except SystemExit:
@@ -330,125 +499,7 @@ class AuraShell:
             self._last_exit_code = 1
 
     # ------------------------------------------------------------------
-    # Built-in dispatcher
-    # ------------------------------------------------------------------
-
-    def _try_builtin(self, cmd: str, tokens: List[str],
-                     redir_path: Optional[str], redir_append: bool) -> Optional[int]:
-        """Attempt to handle *cmd* as a built-in.
-
-        Returns the exit code if handled, or ``None`` if it should be passed
-        to the host OS.
-        """
-        # ---- Shell control ----
-        if cmd in ("exit", "quit"):
-            code = int(tokens[1]) if len(tokens) > 1 else 0
-            self._last_exit_code = code
-            self._exit_flag = True
-            return code
-        if cmd == "cd":
-            self._builtin_cd(tokens[1:])
-            return self._last_exit_code
-        if cmd == "export":
-            self._builtin_export(tokens[1:])
-            return 0
-        if cmd == "set":
-            self._builtin_set(tokens[1:])
-            return 0
-        if cmd == "unset":
-            for name in tokens[1:]:
-                self._env.pop(name, None)
-                os.environ.pop(name, None)
-            return 0
-        if cmd == "alias":
-            self._builtin_alias(tokens[1:])
-            return 0
-        if cmd == "unalias":
-            for name in tokens[1:]:
-                self._aliases.pop(name, None)
-            return 0
-        if cmd == "history":
-            for i, h in enumerate(self._history[-50:], 1):
-                print(f"  {i:4}  {h}")
-            return 0
-        if cmd in ("clear", "cls"):
-            os.system("cls" if os.name == "nt" else "clear")
-            return 0
-        if cmd == "pwd":
-            print(self._cwd)
-            return 0
-        if cmd == "echo":
-            print(" ".join(tokens[1:]))
-            return 0
-        if cmd == "env":
-            for k, v in sorted(self._env.items()):
-                print(f"{k}={v}")
-            return 0
-        if cmd in ("source", "."):
-            script = tokens[1] if len(tokens) > 1 else None
-            if not script:
-                print("[shell] Usage: source <file>")
-                return 1
-            return self.run_script(script)
-        if cmd == "help":
-            self._print_help()
-            return 0
-
-        # ---- Navigation / files ----
-        if cmd == "ls":
-            return self._builtin_ls(tokens[1:])
-        if cmd == "cat":
-            return self._builtin_cat(tokens[1:], redir_path, redir_append)
-        if cmd == "head":
-            return self._builtin_head(tokens[1:])
-        if cmd == "tail":
-            return self._builtin_tail(tokens[1:])
-        if cmd == "mkdir":
-            return self._builtin_mkdir(tokens[1:])
-        if cmd == "rm":
-            return self._builtin_rm(tokens[1:])
-        if cmd == "touch":
-            return self._builtin_touch(tokens[1:])
-        if cmd == "cp":
-            return self._builtin_cp(tokens[1:])
-        if cmd == "mv":
-            return self._builtin_mv(tokens[1:])
-        if cmd == "wc":
-            return self._builtin_wc(tokens[1:])
-        if cmd == "grep":
-            return self._builtin_grep(tokens[1:])
-        if cmd == "which":
-            return self._builtin_which(tokens[1:])
-
-        # ---- System info ----
-        if cmd == "date":
-            print(datetime.datetime.now().strftime("%a %b %d %H:%M:%S %Z %Y"))
-            return 0
-        if cmd == "uname":
-            return self._builtin_uname(tokens[1:])
-        if cmd == "hostname":
-            print(platform.node())
-            return 0
-        if cmd == "uptime":
-            return self._builtin_uptime()
-        if cmd == "whoami":
-            print(getpass.getuser())
-            return 0
-        if cmd == "id":
-            user = getpass.getuser()
-            uid = os.getuid() if hasattr(os, "getuid") else -1
-            gid = os.getgid() if hasattr(os, "getgid") else -1
-            print(f"uid={uid}({user}) gid={gid}")
-            return 0
-        if cmd == "ifconfig":
-            return self._builtin_ifconfig()
-        if cmd == "ping":
-            return self._builtin_ping(tokens[1:])
-
-        return None  # not a built-in
-
-    # ------------------------------------------------------------------
-    # Built-in implementations — shell control
+    # Built-in implementations
     # ------------------------------------------------------------------
 
     def _builtin_cd(self, args: List[str]) -> None:
@@ -464,13 +515,13 @@ class AuraShell:
             self._env["PWD"] = self._cwd
             self._last_exit_code = 0
         except FileNotFoundError:
-            print(f"[shell] cd: no such directory: {target}")
+            print(f"cd: no such directory: {target}")
             self._last_exit_code = 1
         except NotADirectoryError:
-            print(f"[shell] cd: not a directory: {target}")
+            print(f"cd: not a directory: {target}")
             self._last_exit_code = 1
         except PermissionError:
-            print(f"[shell] cd: permission denied: {target}")
+            print(f"cd: permission denied: {target}")
             self._last_exit_code = 1
 
     def _builtin_export(self, args: List[str]) -> None:
@@ -490,12 +541,12 @@ class AuraShell:
         if not args:
             for k, v in sorted(self._env.items()):
                 print(f"  {k}={v}")
-            return
-        for token in args:
-            if "=" in token:
-                k, _, v = token.partition("=")
-                self._env[k] = v
-                os.environ[k] = v
+        elif len(args) >= 2 and args[0].isidentifier():
+            val = " ".join(args[1:])
+            self._env[args[0]] = val
+            os.environ[args[0]] = val
+        else:
+            print("Usage: set <name> <value>")
 
     def _builtin_alias(self, args: List[str]) -> None:
         if not args:
@@ -510,351 +561,209 @@ class AuraShell:
                 if token in self._aliases:
                     print(f"alias {token}='{self._aliases[token]}'")
                 else:
-                    print(f"[shell] alias: {token}: not found")
+                    print(f"alias: {token}: not found")
 
-    # ------------------------------------------------------------------
-    # Built-in implementations — file operations
-    # ------------------------------------------------------------------
+    def _builtin_ls(self, args: List[str]) -> None:
+        target_dir = args[0] if args else self._cwd
+        target_dir = self._abspath(target_dir)
+        try:
+            entries = sorted(os.listdir(target_dir))
+            for entry in entries:
+                full = os.path.join(target_dir, entry)
+                suffix = "/" if os.path.isdir(full) else ""
+                print(f"  {entry}{suffix}")
+            self._last_exit_code = 0
+        except OSError as exc:
+            print(f"ls: {exc}")
+            self._last_exit_code = 1
 
-    def _resolve(self, path: str) -> str:
-        """Resolve *path* relative to the current working directory."""
-        if os.path.isabs(path):
-            return path
-        return os.path.join(self._cwd, path)
-
-    def _builtin_ls(self, args: List[str]) -> int:
-        # Parse -a / -l flags
-        show_hidden = "-a" in args
-        long_fmt = "-l" in args
-        paths = [a for a in args if not a.startswith("-")] or [self._cwd]
-        rc = 0
-        for p in paths:
-            target = self._resolve(p)
-            try:
-                if os.path.isdir(target):
-                    entries = sorted(os.listdir(target))
-                    if not show_hidden:
-                        entries = [e for e in entries if not e.startswith(".")]
-                    if long_fmt:
-                        for entry in entries:
-                            full = os.path.join(target, entry)
-                            stat = os.stat(full)
-                            size = stat.st_size
-                            is_dir = os.path.isdir(full)
-                            suffix = "/" if is_dir else ""
-                            print(f"  {'d' if is_dir else '-'}  {size:>10}  {entry}{suffix}")
-                    else:
-                        for entry in entries:
-                            full = os.path.join(target, entry)
-                            suffix = "/" if os.path.isdir(full) else ""
-                            print(f"  {entry}{suffix}")
-                else:
-                    print(f"  {os.path.basename(target)}")
-            except OSError as exc:
-                print(f"ls: {exc}")
-                rc = 1
-        return rc
-
-    def _builtin_cat(self, args: List[str],
-                     redir_path: Optional[str], redir_append: bool) -> int:
+    def _builtin_cat(self, args: List[str]) -> None:
         if not args:
             print("Usage: cat <file> [...]")
-            return 1
+            return
         rc = 0
-        out = self._open_redir(redir_path, redir_append) if redir_path else None
-        try:
-            for p in args:
-                path = self._resolve(p)
-                try:
-                    with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                        content = fh.read()
-                    if out:
-                        out.write(content)
-                    else:
-                        print(content, end="")
-                except OSError as exc:
-                    print(f"cat: {exc}")
-                    rc = 1
-        finally:
-            if out:
-                out.close()
-        return rc
-
-    def _builtin_head(self, args: List[str]) -> int:
-        n = 10
-        paths = []
-        i = 0
-        while i < len(args):
-            if args[i] in ("-n", "--lines") and i + 1 < len(args):
-                try:
-                    n = int(args[i + 1])
-                except ValueError:
-                    pass
-                i += 2
-            elif args[i].startswith("-") and args[i][1:].isdigit():
-                n = int(args[i][1:])
-                i += 1
-            else:
-                paths.append(args[i])
-                i += 1
-        if not paths:
-            print("Usage: head [-n N] <file> [...]")
-            return 1
-        rc = 0
-        for p in paths:
-            path = self._resolve(p)
+        for fname in args:
+            path = self._abspath(fname)
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                    for j, line in enumerate(fh):
-                        if j >= n:
-                            break
-                        print(line, end="")
+                    print(fh.read(), end="")
             except OSError as exc:
-                print(f"head: {exc}")
+                print(f"cat: {exc}")
                 rc = 1
-        return rc
+        self._last_exit_code = rc
 
-    def _builtin_tail(self, args: List[str]) -> int:
+    def _builtin_head(self, args: List[str]) -> None:
         n = 10
-        paths = []
+        files = []
         i = 0
         while i < len(args):
-            if args[i] in ("-n", "--lines") and i + 1 < len(args):
+            if args[i] == "-n" and i + 1 < len(args):
                 try:
                     n = int(args[i + 1])
                 except ValueError:
                     pass
                 i += 2
-            elif args[i].startswith("-") and args[i][1:].isdigit():
-                n = int(args[i][1:])
-                i += 1
             else:
-                paths.append(args[i])
+                files.append(args[i])
                 i += 1
-        if not paths:
-            print("Usage: tail [-n N] <file> [...]")
-            return 1
-        rc = 0
-        for p in paths:
-            path = self._resolve(p)
+        if not files:
+            print("Usage: head [-n N] <file>")
+            return
+        for fname in files:
+            path = self._abspath(fname)
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    for idx, text_line in enumerate(fh):
+                        if idx >= n:
+                            break
+                        print(text_line, end="")
+                self._last_exit_code = 0
+            except OSError as exc:
+                print(f"head: {exc}")
+                self._last_exit_code = 1
+
+    def _builtin_tail(self, args: List[str]) -> None:
+        n = 10
+        files = []
+        i = 0
+        while i < len(args):
+            if args[i] == "-n" and i + 1 < len(args):
+                try:
+                    n = int(args[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            else:
+                files.append(args[i])
+                i += 1
+        if not files:
+            print("Usage: tail [-n N] <file>")
+            return
+        for fname in files:
+            path = self._abspath(fname)
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as fh:
                     lines = fh.readlines()
-                for line in lines[-n:]:
-                    print(line, end="")
+                for text_line in lines[-n:]:
+                    print(text_line, end="")
+                self._last_exit_code = 0
             except OSError as exc:
                 print(f"tail: {exc}")
-                rc = 1
-        return rc
+                self._last_exit_code = 1
 
-    def _builtin_mkdir(self, args: List[str]) -> int:
+    def _builtin_rm(self, args: List[str]) -> None:
         if not args:
-            print("Usage: mkdir <dir> [...]")
-            return 1
-        rc = 0
-        for p in args:
-            if p.startswith("-"):
-                continue  # ignore -p etc.; we always use makedirs
-            path = self._resolve(p)
-            try:
-                os.makedirs(path, exist_ok=True)
-            except OSError as exc:
-                print(f"mkdir: {exc}")
-                rc = 1
-        return rc
-
-    def _builtin_rm(self, args: List[str]) -> int:
-        recursive = "-r" in args or "-rf" in args or "-fr" in args
-        paths = [a for a in args if not a.startswith("-")]
-        if not paths:
-            print("Usage: rm [-r] <path> [...]")
-            return 1
-        rc = 0
-        for p in paths:
-            path = self._resolve(p)
+            print("Usage: rm <path> [...]")
+            return
+        import shutil as _shutil
+        for fname in args:
+            if fname in ("-r", "-rf", "-f"):
+                continue
+            path = self._abspath(fname)
             try:
                 if os.path.isdir(path):
-                    if recursive:
-                        shutil.rmtree(path)
-                    else:
-                        print(f"rm: {path}: is a directory (use -r)")
-                        rc = 1
+                    _shutil.rmtree(path)
                 else:
                     os.remove(path)
+                self._last_exit_code = 0
             except OSError as exc:
                 print(f"rm: {exc}")
-                rc = 1
-        return rc
+                self._last_exit_code = 1
 
-    def _builtin_touch(self, args: List[str]) -> int:
-        if not args:
-            print("Usage: touch <file> [...]")
-            return 1
-        rc = 0
-        for p in args:
-            path = self._resolve(p)
-            try:
-                Path(path).touch()
-            except OSError as exc:
-                print(f"touch: {exc}")
-                rc = 1
-        return rc
-
-    def _builtin_cp(self, args: List[str]) -> int:
-        recursive = "-r" in args or "-R" in args
-        paths = [a for a in args if not a.startswith("-")]
-        if len(paths) < 2:
-            print("Usage: cp [-r] <src> <dst>")
-            return 1
-        src = self._resolve(paths[0])
-        dst = self._resolve(paths[1])
+    def _builtin_cp(self, args: List[str]) -> None:
+        if len(args) < 2:
+            print("Usage: cp <src> <dst>")
+            return
+        import shutil as _shutil
+        src, dst = self._abspath(args[-2]), self._abspath(args[-1])
         try:
             if os.path.isdir(src):
-                if recursive:
-                    shutil.copytree(src, dst)
-                else:
-                    print(f"cp: {src}: is a directory (use -r)")
-                    return 1
+                _shutil.copytree(src, dst)
             else:
-                shutil.copy2(src, dst)
+                _shutil.copy2(src, dst)
+            self._last_exit_code = 0
         except OSError as exc:
             print(f"cp: {exc}")
-            return 1
-        return 0
+            self._last_exit_code = 1
 
-    def _builtin_mv(self, args: List[str]) -> int:
-        paths = [a for a in args if not a.startswith("-")]
-        if len(paths) < 2:
+    def _builtin_mv(self, args: List[str]) -> None:
+        if len(args) < 2:
             print("Usage: mv <src> <dst>")
-            return 1
-        src = self._resolve(paths[0])
-        dst = self._resolve(paths[1])
+            return
+        import shutil as _shutil
+        src, dst = self._abspath(args[-2]), self._abspath(args[-1])
         try:
-            shutil.move(src, dst)
+            _shutil.move(src, dst)
+            self._last_exit_code = 0
         except OSError as exc:
             print(f"mv: {exc}")
-            return 1
-        return 0
+            self._last_exit_code = 1
 
-    def _builtin_wc(self, args: List[str]) -> int:
+    def _builtin_wc(self, args: List[str]) -> None:
         if not args:
-            print("Usage: wc <file> [...]")
-            return 1
-        rc = 0
-        for p in args:
-            path = self._resolve(p)
+            print("Usage: wc <file>")
+            return
+        for fname in args:
+            path = self._abspath(fname)
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as fh:
                     content = fh.read()
-                lc = content.count("\n")
-                wc = len(content.split())
-                cc = len(content)
-                print(f"  {lc:6} {wc:6} {cc:6}  {p}")
+                line_ct = content.count("\n")
+                word_ct = len(content.split())
+                char_ct = len(content)
+                print(f"  {line_ct} {word_ct} {char_ct} {fname}")
+                self._last_exit_code = 0
             except OSError as exc:
                 print(f"wc: {exc}")
-                rc = 1
-        return rc
+                self._last_exit_code = 1
 
-    def _builtin_grep(self, args: List[str]) -> int:
-        case_insensitive = "-i" in args
-        show_line_nums = "-n" in args
-        args_clean = [a for a in args if not a.startswith("-")]
-        if len(args_clean) < 2:
-            print("Usage: grep [-i] [-n] <pattern> <file> [...]")
-            return 1
-        pattern = args_clean[0]
-        files = args_clean[1:]
-        rc = 1  # 1 = no matches (grep convention)
-        flags = re.IGNORECASE if case_insensitive else 0
-        try:
-            compiled = re.compile(pattern, flags)
-        except re.error as exc:
-            print(f"grep: invalid pattern: {exc}")
-            return 2
-        for p in files:
-            path = self._resolve(p)
+    def _builtin_grep(self, args: List[str]) -> None:
+        if len(args) < 2:
+            print("Usage: grep <pattern> <file> [...]")
+            return
+        pattern = args[0]
+        files = args[1:]
+        rc = 1  # no match
+        for fname in files:
+            path = self._abspath(fname)
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                    for lineno, line in enumerate(fh, 1):
-                        if compiled.search(line):
-                            prefix = f"{lineno}:" if show_line_nums else ""
-                            print(f"  {prefix}{line}", end="")
+                    for i, text_line in enumerate(fh, 1):
+                        if pattern in text_line:
+                            prefix = f"{fname}:" if len(files) > 1 else ""
+                            print(f"  {prefix}{i}: {text_line}", end="")
                             rc = 0
             except OSError as exc:
                 print(f"grep: {exc}")
                 rc = 2
-        return rc
+        self._last_exit_code = rc
 
-    def _builtin_which(self, args: List[str]) -> int:
-        if not args:
-            print("Usage: which <binary> [...]")
-            return 1
-        rc = 0
-        for name in args:
-            result = shutil.which(name)
-            if result:
-                print(result)
-            else:
-                print(f"[shell] which: {name}: not found")
-                rc = 1
-        return rc
-
-    # ------------------------------------------------------------------
-    # Built-in implementations — system info
-    # ------------------------------------------------------------------
-
-    def _builtin_uname(self, args: List[str]) -> int:
-        u = platform.uname()
-        flag = args[0] if args else "-s"
-        if flag == "-a":
-            print(f"{u.system} {u.node} {u.release} {u.version} {u.machine}")
-        elif flag == "-r":
-            print(u.release)
-        elif flag == "-m":
-            print(u.machine)
-        elif flag == "-n":
-            print(u.node)
-        elif flag == "-s":
-            print(u.system)
-        else:
-            print(u.system)
-        return 0
-
-    def _builtin_uptime(self) -> int:
+    def _builtin_uptime(self) -> None:
         try:
             import psutil
-            import time
-            secs = time.time() - psutil.boot_time()
-            days = int(secs // 86400)
-            hours = int((secs % 86400) // 3600)
-            mins = int((secs % 3600) // 60)
-            parts = []
-            if days:
-                parts.append(f"{days}d")
-            parts.append(f"{hours}h {mins}m")
-            print(f"  up {', '.join(parts)}")
-            return 0
-        except ImportError:
-            pass
-        # Fallback: read /proc/uptime on Linux
-        try:
-            with open("/proc/uptime", "r") as fh:
-                secs = float(fh.read().split()[0])
-            days = int(secs // 86400)
-            hours = int((secs % 86400) // 3600)
-            mins = int((secs % 3600) // 60)
-            parts = []
-            if days:
-                parts.append(f"{days}d")
-            parts.append(f"{hours}h {mins}m")
-            print(f"  up {', '.join(parts)}")
-            return 0
-        except OSError:
-            pass
-        print("  uptime: unavailable")
-        return 0
+            import time as _time
+            uptime_s = _time.time() - psutil.boot_time()
+        except (ImportError, Exception):
+            try:
+                with open("/proc/uptime", "r") as fh:
+                    uptime_s = float(fh.read().split()[0])
+            except OSError:
+                print("uptime: unavailable")
+                self._last_exit_code = 1
+                return
+        days = int(uptime_s // 86400)
+        hours = int((uptime_s % 86400) // 3600)
+        mins = int((uptime_s % 3600) // 60)
+        parts = []
+        if days:
+            parts.append(f"{days} day(s)")
+        if hours:
+            parts.append(f"{hours}h")
+        parts.append(f"{mins}m")
+        print(f"  up {', '.join(parts)}")
+        self._last_exit_code = 0
 
-    def _builtin_ifconfig(self) -> int:
+    def _builtin_ifconfig(self) -> None:
         try:
             from aura_os.net import NetworkManager
             nm = NetworkManager()
@@ -862,25 +771,16 @@ class AuraShell:
                 status = "UP" if iface.get("is_up") else "DOWN"
                 addrs = ", ".join(iface.get("addresses", [])) or "no address"
                 print(f"  {iface['name']:<15} {status:<6}  {addrs}")
-            return 0
-        except Exception:
-            pass
-        # Fallback: run system ifconfig / ip
-        for cmd in (["ip", "addr"], ["ifconfig"]):
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    print(result.stdout)
-                    return 0
-            except FileNotFoundError:
-                continue
-        print("ifconfig: unavailable")
-        return 1
+            self._last_exit_code = 0
+        except Exception as exc:
+            print(f"ifconfig: {exc}")
+            self._last_exit_code = 1
 
-    def _builtin_ping(self, args: List[str]) -> int:
+    def _builtin_ping(self, args: List[str]) -> None:
         if not args:
             print("Usage: ping <host> [-c count]")
-            return 1
+            self._last_exit_code = 1
+            return
         host = args[0]
         count = 4
         if "-c" in args:
@@ -895,99 +795,105 @@ class AuraShell:
             nm = NetworkManager()
             result = nm.ping(host, count=count)
             if result.get("success"):
-                print(f"  PING {host}: {result['packets_received']}/{result['packets_sent']} "
-                      f"received, avg {result.get('avg_ms', 0):.1f} ms")
+                print(f"  PING {host}: {result['packets_received']}/{result['packets_sent']}"
+                      f" received, avg {result.get('avg_ms', 0):.1f} ms")
+                self._last_exit_code = 0
             else:
                 print(f"  PING {host}: failed — host unreachable or ping not available")
-            return 0 if result.get("success") else 1
-        except Exception:
-            pass
-        # Fallback to system ping
-        try:
-            flag = "-c" if sys.platform != "win32" else "-n"
-            result = subprocess.run(
-                ["ping", flag, str(count), host],
-                stdout=None, stderr=None,
-            )
-            return result.returncode
-        except FileNotFoundError:
-            print(f"ping: command not found")
-            return 127
-
-    # ------------------------------------------------------------------
-    # Help
-    # ------------------------------------------------------------------
+                self._last_exit_code = 1
+        except Exception as exc:
+            print(f"ping: {exc}")
+            self._last_exit_code = 1
 
     def _print_help(self) -> None:
         print("""
   AURA OS Shell — Built-in Commands
-  ──────────────────────────────────────────────────────
+  ──────────────────────────────────────────────────
   Navigation & Files:
-    cd [dir]              Change directory
-    pwd                   Print working directory
-    ls [-a] [-l] [dir]    List directory contents
-    cat <file> [...]      Print file contents
-    head [-n N] <file>    Print first N lines (default 10)
-    tail [-n N] <file>    Print last N lines (default 10)
-    mkdir <dir> [...]     Create directory (with parents)
-    rm [-r] <path> [...]  Remove file or directory
-    touch <file> [...]    Create empty file
-    cp [-r] <src> <dst>   Copy file or directory
-    mv <src> <dst>        Move / rename file or directory
-    wc <file> [...]       Count lines, words, chars
-    grep [-i] [-n] <pat> <file>  Search for pattern in file
+    cd [dir]          Change directory
+    pwd               Print working directory
+    ls [dir]          List directory contents
+    cat <file>        Print file contents
+    head [-n N] <f>   Print first N lines (default 10)
+    tail [-n N] <f>   Print last N lines (default 10)
+    mkdir <dir>       Create directory
+    rm <path>         Remove file or directory
+    touch <file>      Create or update file
+    cp <src> <dst>    Copy file or directory
+    mv <src> <dst>    Move/rename file or directory
+    wc <file>         Count lines, words, chars
+    grep <pat> <file> Search for pattern in file
+    which <binary>    Locate a binary in PATH
 
   Environment & Variables:
-    export [VAR=val]      Set / list environment variables
-    set [VAR=val]         Set shell variable
-    unset <name>          Remove shell variable
-    alias [name=cmd]      Set / list command aliases
-    unalias <name>        Remove an alias
-    echo [text]           Print text (supports $VAR expansion)
-    env                   Show all environment variables
+    export [VAR=val]  Set/show environment variables
+    set <name> <val>  Set a shell variable
+    unset <name>      Remove a variable
+    alias [name=cmd]  Set/show command aliases
+    unalias <name>    Remove an alias
+    echo <text>       Print text (supports $VAR expansion)
+    env               Show all environment variables
 
   System:
-    whoami                Print current user
-    id                    Print user id and group
-    hostname              Print hostname
-    date                  Print current date and time
-    uname [-a|-r|-m|-n]   Print system information
-    uptime                Show system uptime
-    ifconfig              Show network interfaces
-    ping <host> [-c N]    Ping a host
-    which <binary>        Locate a binary in PATH
-    clear                 Clear the terminal
+    whoami            Print current user
+    id                Print uid/gid
+    hostname          Print hostname
+    date              Print current date/time
+    uname [-a|-r|-m]  Print system information
+    uptime            Show system uptime
+    ifconfig          List network interfaces
+    ping <host>       Ping a host
+    clear             Clear the terminal
+
+  Shell Control:
+    history           Show command history
+    help              Show this help
+    exit [code]       Exit the shell
+    quit              Exit the shell
 
   Shell Features:
-    cmd1 | cmd2           Pipe output between commands
-    cmd > file            Redirect output to file (overwrite)
-    cmd >> file           Append output to file
-    cmd &                 Run command in background
-    cmd1 && cmd2          Run cmd2 only if cmd1 succeeds
-    cmd1 || cmd2          Run cmd2 only if cmd1 fails
-    cmd1 ; cmd2           Run both commands
-    $VAR / ${VAR}         Environment variable expansion
-    VAR=value             Assign shell variable
-    source <file>         Execute commands from file
+    cmd1 | cmd2       Pipe output between commands
+    cmd > file        Redirect output to file
+    cmd >> file       Append output to file
+    cmd1 && cmd2      Run cmd2 only if cmd1 succeeds
+    cmd1 || cmd2      Run cmd2 only if cmd1 fails
+    cmd1 ; cmd2       Run commands sequentially
+    cmd &             Run command in background
+    $VAR / ${VAR}     Variable expansion
+    VAR=value         Shell variable assignment
+    *  ?  [...]       Glob expansion in arguments
 
-  AURA Commands (prefix with 'aura'):
-    aura ps               List tracked processes
-    aura sys              System status
-    aura health           Health dashboard
-    aura service list     List services
-    aura net status       Network status
-    aura log tail         View system log
-    aura ai "<prompt>"    Query AI assistant
-    (run 'aura --help' for the full command list)
-
-    exit [code]           Exit the shell
-    Ctrl-D                Exit the shell
-    Ctrl-C                Cancel current input
+  AURA Commands (requires 'aura' prefix):
+    aura ps           List tracked processes
+    aura sys          Show system status
+    aura service ...  Manage services
+    aura pkg ...      Package management
+    aura ai <prompt>  Query AI assistant
+    (and all other 'aura' sub-commands)
 """)
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _abspath(self, path: str) -> str:
+        """Resolve *path* relative to the shell's current directory."""
+        path = self._expand_vars(os.path.expanduser(path))
+        if not os.path.isabs(path):
+            path = os.path.join(self._cwd, path)
+        return os.path.normpath(path)
+
+    def _expand_globs(self, tokens: List[str]) -> List[str]:
+        """Expand glob patterns in *tokens*.  Unmatched patterns pass through."""
+        result: List[str] = []
+        for part in tokens:
+            if any(c in part for c in ("*", "?", "[")):
+                pattern = part if os.path.isabs(part) else os.path.join(self._cwd, part)
+                matches = sorted(_glob_mod.glob(pattern))
+                result.extend(matches if matches else [part])
+            else:
+                result.append(part)
+        return result
 
     def _build_prompt(self) -> str:
         cwd_display = self._cwd.replace(os.path.expanduser("~"), "~")
@@ -1139,13 +1045,19 @@ class ShellCommand:
     """``aura shell`` — start an interactive AURA shell."""
 
     def execute(self, args, eal) -> int:
-        from aura_os.main import _build_router
-        script = getattr(args, "script", None)
+        # Lazy import avoids circular dependency (main → shell → main).
+        from aura_os.main import _build_router  # type: ignore[attr-defined]
+        from aura_os.engine.cli import build_parser
+
         try:
             router = _build_router()
-        except Exception:
+            parser = build_parser()
+        except Exception:  # noqa: BLE001
             router = None
-        shell = AuraShell(eal=eal, router=router)
+            parser = None
+
+        script = getattr(args, "script", None)
+        shell = AuraShell(eal=eal, router=router, parser=parser)
         if script:
             return shell.run_script(script)
         return shell.run()

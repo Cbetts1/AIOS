@@ -23,7 +23,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ## [0.2.0] — 2024-xx-xx
 
 ### Added
-- 22 CLI commands: `run`, `ai`, `env`, `pkg`, `sys`, `ps`, `kill`, `service`, `log`, `user`, `net`, `init`, `notify`, `cron`, `clip`, `plugin`, `secret`, `disk`, `health`, `monitor`, `web`, `shell`
+- 28 CLI commands: `run`, `ai`, `env`, `pkg`, `sys`, `ps`, `kill`, `service`, `log`, `user`, `net`, `init`, `notify`, `cron`, `clip`, `plugin`, `secret`, `disk`, `health`, `monitor`, `web`, `shell`, `center`, `validate`, `build`, `diag`, `repair`, `cloud`
 - macOS EAL adapter (`sysctl` memory, `sw_vers` version, Apple Silicon detection)
 - Windows EAL adapter (`winreg`, `psutil`/`wmic`, `winget`/`choco`/`scoop`)
 - Fernet-encrypted secret store with PBKDF2 key derivation (100 000 iterations), XOR fallback

@@ -3,7 +3,6 @@
 import os
 import shutil
 import subprocess
-from typing import Optional
 
 
 # Maps file extension → (runtime_binary, extra_flags)

@@ -175,7 +175,7 @@ def _mem_fallback():
     try:
         with open("/proc/meminfo") as fh:
             lines = {k.strip(): v.strip() for k, v in
-                     (l.split(":", 1) for l in fh if ":" in l)}
+                     (ln.split(":", 1) for ln in fh if ":" in ln)}
         total = int(lines.get("MemTotal", "0").split()[0]) * 1024
         avail = int(lines.get("MemAvailable", "0").split()[0]) * 1024
         used = total - avail

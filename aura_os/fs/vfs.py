@@ -14,7 +14,7 @@ import fnmatch
 import os
 import stat
 import tempfile
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class VirtualFS:

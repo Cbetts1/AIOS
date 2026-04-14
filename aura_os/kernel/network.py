@@ -15,7 +15,6 @@ import time
 from typing import Dict, List, Optional
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
-from urllib.parse import urlparse
 
 
 class NetworkManager:

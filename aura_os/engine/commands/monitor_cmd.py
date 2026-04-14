@@ -12,7 +12,6 @@ Refresh interval defaults to 2 s.  Press Ctrl-C to exit.
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 

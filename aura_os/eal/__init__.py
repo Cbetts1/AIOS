@@ -1,8 +1,7 @@
 """Environment Abstraction Layer (EAL) for AURA OS."""
 
 import os
-import shutil
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from . import detector
 from .adapters.android import AndroidAdapter

@@ -9,7 +9,7 @@ import os
 import shutil
 import subprocess
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class ClipboardManager:

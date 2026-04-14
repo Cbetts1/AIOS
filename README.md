@@ -35,7 +35,7 @@ AIOS/
 │   │   ├── detector.py    ← Platform detection (linux/macos/android/windows)
 │   │   └── adapters/      ← Linux · macOS · Android · Windows · Fallback
 │   ├── engine/            ← Command dispatch
-│   │   ├── cli.py         ← argparse parser (21 subcommands)
+│   │   ├── cli.py         ← argparse parser (28 subcommands)
 │   │   ├── router.py      ← CommandRouter
 │   │   └── commands/      ← One file per CLI command
 │   ├── kernel/            ← OS kernel subsystems (12)
@@ -54,13 +54,16 @@ AIOS/
 │   ├── fs/                ← Virtual filesystem (VFS, KVStore, procfs, FHS)
 │   ├── pkg/               ← Package registry & manager
 │   ├── ai/                ← Local AI inference (ollama/llama.cpp)
+│   ├── build/             ← System validator & manifest builder
 │   ├── config/            ← Settings singleton & defaults
 │   ├── users/             ← User management (PBKDF2 auth)
 │   ├── net/               ← Extended network manager
 │   ├── init/              ← Boot/shutdown sequencer
-│   └── web/               ← REST API server (Flask or stdlib fallback)
+│   ├── maintenance/       ← Diagnostics & repair utilities
+│   ├── cloud/             ← HTTP client & remote node registry
+│   └── web/               ← REST API + mobile HTML dashboard (Flask or stdlib)
 │
-├── tests/                 ← pytest suite (530+ tests)
+├── tests/                 ← pytest suite (600+ tests across 16 files)
 ├── docs/
 │   └── architecture.md    ← Full architecture documentation
 ├── configs/
@@ -131,6 +134,8 @@ aura env                   Show full environment info
 aura env --json            Output as JSON
 aura health                System health dashboard
 aura monitor               Real-time resource monitor
+aura diag                  Run system diagnostics
+aura repair                Repair AURA runtime directories and configs
 
 # Processes & services
 aura ps                    List tracked processes
@@ -150,6 +155,13 @@ aura run <file>            Run .py / .sh / .js file
 aura ai "<prompt>"         Query local AI model (ollama/llama.cpp)
 aura shell                 Launch interactive REPL shell
 aura shell --script <file> Execute commands from a script file (non-interactive)
+
+# Shell built-ins (available inside `aura shell`)
+ls, cat, head, tail, mkdir, rm, touch, cp, mv   File operations
+grep, wc, which                                  Search & info
+date, uname, hostname, uptime, whoami, id        System info
+pipe (|), redirect (> >>), chain (&&, ||, ;)     Shell features
+alias, export, set, unset, history, source       Variable & env control
 
 # Network
 aura net status            Network connectivity status
@@ -178,13 +190,30 @@ aura plugin create <name>  Scaffold a new plugin
 aura cron add <name> --schedule "*/5 * * * *" --cmd "echo hi"
 aura cron list             List cron jobs
 
+# Build & validation
+aura validate              Run integrity validation checks
+aura build manifest        Print system manifest summary
+aura build manifest --output manifest.json  Save manifest as JSON
+aura build diff old.json new.json           Diff two manifests
+aura build validate        Alias for 'aura validate'
+
+# Cloud
+aura cloud ping <url>      Ping a remote HTTP endpoint
+aura cloud get <url>       HTTP GET a URL
+aura cloud nodes           List registered remote nodes
+
 # Other
 aura log tail              Show recent system log
 aura init status           Show boot unit status
 aura disk df               Filesystem usage (like df -h)
-aura web                   Start REST API server (http://localhost:7070)
-aura web --port 8080        Start on a custom port
+aura center                Live TUI system dashboard
+aura web                   Start web dashboard + REST API (http://localhost:7070)
+aura web --port 8080       Start on a custom port
 ```
+
+The `aura web` dashboard is mobile-friendly and opens at `http://localhost:7070`.
+It shows live CPU/memory/disk charts, process list, system log, and an AI assistant
+— all accessible from a phone or browser.
 
 ---
 

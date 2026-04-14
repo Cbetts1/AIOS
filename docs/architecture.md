@@ -225,15 +225,6 @@ aura (shell script)
        │         └─ WebServer
        └─ Settings (singleton, loaded on first access)
 ```
-       │         ├─ VirtualFS / KVStore
-       │         ├─ PackageManager / LocalRegistry
-       │         ├─ LocalInference / ModelManager
-       │         ├─ UserManager
-       │         ├─ NetworkManager (net/)
-       │         ├─ InitManager
-       │         └─ WebServer
-       └─ Settings (singleton, loaded on first access)
-```
 
 Data flows:
 1. The shell script sets `AURA_HOME` and invokes `python3 -m aura_os.main`.

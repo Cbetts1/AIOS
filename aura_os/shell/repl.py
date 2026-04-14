@@ -391,7 +391,7 @@ class AuraShell:
         if not path:
             return None
         try:
-            return open(path, "a" if append else "w", encoding="utf-8")  # noqa: SIM115
+            return Path(path).open("a" if append else "w", encoding="utf-8")
         except OSError as exc:
             print(f"[shell] Cannot open '{path}': {exc}")
             return None

@@ -12,8 +12,6 @@ REST endpoints:
 """
 
 import json
-import os
-import sys
 import threading
 from typing import Optional
 

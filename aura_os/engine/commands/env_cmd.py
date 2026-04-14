@@ -27,7 +27,7 @@ class EnvCommand:
     def _print_human(info: dict):
         """Render *info* as a human-readable table."""
         print("─" * 50)
-        print(f"  AURA OS — Environment Info")
+        print("  AURA OS — Environment Info")
         print("─" * 50)
 
         print(f"\n  Platform   : {info.get('platform', 'unknown')}")

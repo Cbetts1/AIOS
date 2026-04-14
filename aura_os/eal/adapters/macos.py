@@ -93,7 +93,6 @@ class MacOSAdapter:
     def _detect_arch() -> str:
         """Return the machine architecture string."""
         try:
-            rc, out, _ = 0, "", ""
             result = subprocess.run(
                 ["uname", "-m"], capture_output=True, text=True
             )

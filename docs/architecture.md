@@ -2,37 +2,49 @@
 
 ## 1. System Overview
 
-AURA OS (Universal Adaptive User-Space Operating System Layer) is a portable, modular shell operating system implemented in pure Python 3.8+. It runs on top of any host — Linux, macOS, Android/Termux, or Windows — and provides a unified CLI with file management, package management, AI inference, a cooperative task scheduler, IPC, an interactive REPL shell, and an optional web API.
+AURA OS (Universal Adaptive User-Space Operating System Layer) is a real,
+portable, modular shell operating system implemented in pure Python 3.8+.
+It runs on top of any host — Linux, macOS, Android/Termux, or Windows —
+and provides a unified CLI with file management, package management, AI
+inference, a cooperative task scheduler, IPC, an interactive REPL shell,
+and an optional web API.
 
-The design principle is *zero mandatory runtime dependencies*: every subsystem degrades gracefully when optional components (psutil, readline, ollama, llama.cpp, flask) are absent.
+The **OS core is real**: shell execution, process control, service management,
+file operations, logging, and system diagnostics all call the real host OS.
+Higher-level capabilities (Command Center, AI assistant, cloud integration,
+build/repair tooling) are layered on top of the real OS foundation.
+
+The design principle is *zero mandatory runtime dependencies*: every subsystem
+degrades gracefully when optional components (psutil, readline, ollama,
+llama.cpp, flask) are absent.
 
 ---
 
 ## 2. Layer Descriptions
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│              CLI / Shell / Web API (aura)                         │  ← user-facing
-├─────────────────┬────────────────────────────────────────────────┤
-│  Engine          │  21 commands: run · ai · env · pkg · sys · ps  │  ← command dispatch
-│                  │  kill · service · log · user · net · init       │
-│                  │  notify · cron · clip · plugin · secret · disk  │
-│                  │  health · monitor · web                         │
-├─────────────────┴────────────────────────────────────────────────┤
-│  EAL  — Environment Abstraction Layer                             │  ← host adaptation
-│    Detector  │  Adapters: Linux · macOS · Android · Windows ·     │
-│              │            Fallback                                 │
-├─────────────────┬──────────────┬──────────────────────────────── ┤
-│  Kernel (12)    │  FS          │  Pkg  │  AI  │  Config  │ Users │  ← core services
-│  scheduler      │  VFS/KV      │  mgr  │  inf │  settings│ mgr   │
-│  memory · ipc   │  procfs/fhs  │       │      │          │       │
-│  process · svc  │              │  Net  │ Init │   Web    │       │
-│  syslog · net   │              │  mgr  │  mgr │   API    │       │
-│  events · cron  │              │       │      │          │       │
-│  clipboard      │              │       │      │          │       │
-│  plugins · secrets             │       │      │          │       │
-└─────────────────┴──────────────┴───────┴──────┴──────────┴───────┘
-         (host OS: Linux / macOS / Android/Termux / Windows)
+┌──────────────────────────────────────────────────────────────────────┐
+│  Layer 5 — Cloud / Mesh / Distributed  (aura_os/cloud/)              │
+│    CloudClient · NodeRegistry · remote fleet management              │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 4 — AI Layer  (aura_os/ai/)                                   │
+│    AuraPersona · AuraSession · LocalInference · ModelManager         │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 3 — Operator Interface                                         │
+│    Command Center (aura_os/command_center/)  ·  Web API (aura_os/web/)│
+│    Shell REPL (aura_os/shell/)               ·  Engine commands       │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 2 — Build / Maintenance / Repair                              │
+│    Validator · ManifestBuilder  (aura_os/build/)                     │
+│    Diagnostics · Repair         (aura_os/maintenance/)               │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 1 — OS Core Services                                          │
+│    Kernel (12 subsystems) · FS · Pkg · Users · Net · Init · Config   │
+├──────────────────────────────────────────────────────────────────────┤
+│  Layer 0 — Environment Abstraction (EAL)                             │
+│    Detector · Adapters: Linux · macOS · Android · Windows · Fallback │
+└──────────────────────────────────────────────────────────────────────┘
+                 (host OS: Linux / macOS / Android/Termux / Windows)
 ```
 
 ### 2.1 EAL — Environment Abstraction Layer (`aura_os/eal/`)
@@ -114,6 +126,8 @@ The design principle is *zero mandatory runtime dependencies*: every subsystem d
 |---|---|
 | `model_manager.py` | `ModelManager`: detects runtimes (ollama HTTP, ollama CLI, llama-cli, ctransformers); lists model files |
 | `inference.py` | `LocalInference`: routes prompts to ollama → llama-cli → instructional fallback; streaming support |
+| `aura.py` | `AuraPersona`: context-aware AI assistant; injects live system state into prompts; fallback responses when no runtime |
+| `session.py` | `AuraSession`: multi-turn conversation history; persisted under `~/.aura/ai/sessions/` |
 
 ### 2.7 Config (`aura_os/config/`)
 
@@ -147,6 +161,44 @@ The design principle is *zero mandatory runtime dependencies*: every subsystem d
 | `__init__.py` | `WebServer`: REST API on port 7070; Flask backend preferred, stdlib `http.server` fallback |
 | REST endpoints | `GET /api/status`, `GET /api/ps`, `GET /api/log`, `POST /api/ai` |
 
+### 2.12 Command Center (`aura_os/command_center/`)
+
+| Module | Role |
+|---|---|
+| `center.py` | `CommandCenter`: aggregated live dashboard for CPU, RAM, disk, processes, services, network, logs, and health score |
+| `CenterCommand` | `aura center` — one-shot dashboard or `--watch` continuous refresh TUI |
+
+### 2.13 Shell (`aura_os/shell/`)
+
+| Module | Role |
+|---|---|
+| `repl.py` | `AuraShell`: real interactive REPL backed by the host OS; pipe/redirect/background/alias/script support |
+| `ShellCommand` | `aura shell` — start the interactive shell; `--script FILE` for non-interactive execution |
+
+### 2.14 Build & Validation (`aura_os/build/`)
+
+| Module | Role |
+|---|---|
+| `validator.py` | `Validator`: checks Python version, directory structure, kernel imports, psutil, disk space, log writerability |
+| `manifest.py` | `ManifestBuilder`: generates JSON manifest of installed packages, kernel modules, filesystem, services; diff support |
+| CLI | `aura validate`, `aura build manifest`, `aura build diff <old> <new>` |
+
+### 2.15 Maintenance & Repair (`aura_os/maintenance/`)
+
+| Module | Role |
+|---|---|
+| `diagnostics.py` | `Diagnostics`: real system diagnostic checks (platform, Python, hardware, network, filesystem, kernel, dependencies) |
+| `repair.py` | `Repair`: recreates missing dirs, restores corrupt configs, rotates large logs, purges stale state files |
+| CLI | `aura diag`, `aura repair [all\|dirs\|config\|logs\|state]` |
+
+### 2.16 Cloud & Network (`aura_os/cloud/`)
+
+| Module | Role |
+|---|---|
+| `client.py` | `CloudClient`: real HTTP/HTTPS client (stdlib `urllib`); ping, GET, POST JSON, file download |
+| `nodes.py` | `NodeRegistry`: persist and query remote AURA OS nodes; liveness pinging via `CloudClient` |
+| CLI | `aura cloud ping <url>`, `aura cloud get <url>`, `aura cloud nodes`, `aura cloud status` |
+
 ---
 
 ## 3. Module Interaction
@@ -155,10 +207,24 @@ The design principle is *zero mandatory runtime dependencies*: every subsystem d
 aura (shell script)
   └─ python3 -m aura_os.main
        ├─ EAL.__init__()          → detector → adapter (linux/macos/android/windows/fallback)
-       ├─ build_parser()          → argparse tree (21 commands)
+       ├─ build_parser()          → argparse tree (28 commands)
        ├─ CommandRouter.dispatch()
        │    └─ XxxCommand.execute(args, eal)
        │         ├─ eal.run_command(...)
+       │         ├─ VirtualFS / KVStore
+       │         ├─ PackageManager / LocalRegistry
+       │         ├─ LocalInference / ModelManager / AuraPersona / AuraSession
+       │         ├─ CommandCenter (live dashboard)
+       │         ├─ AuraShell (interactive REPL)
+       │         ├─ Validator / ManifestBuilder (build layer)
+       │         ├─ Diagnostics / Repair (maintenance layer)
+       │         ├─ CloudClient / NodeRegistry (cloud layer)
+       │         ├─ UserManager
+       │         ├─ NetworkManager (net/)
+       │         ├─ InitManager
+       │         └─ WebServer
+       └─ Settings (singleton, loaded on first access)
+```
        │         ├─ VirtualFS / KVStore
        │         ├─ PackageManager / LocalRegistry
        │         ├─ LocalInference / ModelManager
@@ -228,27 +294,37 @@ Data flows:
 
 ```
 ~/.aura/
-├── bin/          ← aura entry-point symlink / wrapper
+├── ai/
+│   └── sessions/     ← AuraSession conversation history (JSON)
+├── bin/              ← aura entry-point symlink / wrapper
+├── cloud/
+│   └── nodes.json    ← NodeRegistry remote nodes
+├── configs/
+│   └── system.json   ← system configuration (managed by Repair)
 ├── config/
-│   └── settings.json
+│   └── settings.json ← Settings singleton store
 ├── cron/
-│   └── jobs.json         ← persisted cron job definitions
+│   └── jobs.json     ← persisted cron job definitions
 ├── data/
 │   ├── store.json
 │   └── .history
 ├── home/
-│   └── <username>/       ← per-user home directories
-├── ipc/          ← IPCChannel message queues
+│   └── <username>/   ← per-user home directories
+├── ipc/              ← IPCChannel message queues
 ├── lib/
-│   └── aura_os/  ← installed library copy
-├── logs/
-├── models/       ← local AI model files (.gguf, .bin)
+│   └── aura_os/      ← installed library copy
+├── logs/             ← Syslog and service logs
+├── models/           ← local AI model files (.gguf, .bin)
 ├── pkg/
 │   ├── installed/
 │   └── registry.json
-├── plugins/      ← plugin directories (each with plugin.json + main.py)
-├── secrets/      ← encrypted secrets (per-namespace JSON files + audit.log)
-└── users/        ← user records (per-user JSON files)
+├── plugins/          ← plugin directories (each with plugin.json + main.py)
+├── repos/            ← cloned/tracked repos
+├── secrets/          ← encrypted secrets (per-namespace JSON files + audit.log)
+├── services/         ← service manifests (JSON)
+├── shell_history     ← AuraShell readline history
+├── tasks/            ← deferred task definitions
+└── users/            ← user records (per-user JSON files)
 ```
 
 ---

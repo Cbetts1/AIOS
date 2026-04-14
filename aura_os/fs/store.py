@@ -3,7 +3,7 @@
 import json
 import os
 import threading
-from typing import Any, List, Optional
+from typing import Any, List
 
 
 class KVStore:

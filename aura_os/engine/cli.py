@@ -348,4 +348,59 @@ def build_parser() -> argparse.ArgumentParser:
         help="Port to listen on (default: 7070)",
     )
 
+    # ------------------------------------------------------------------ center
+    center_p = subparsers.add_parser(
+        "center", help="Launch the AURA OS Command Center dashboard"
+    )
+    center_p.add_argument(
+        "--watch", action="store_true",
+        help="Continuously refresh the dashboard",
+    )
+    center_p.add_argument(
+        "--interval", type=float, default=3.0, metavar="SECS",
+        help="Refresh interval in seconds (default: 3.0, with --watch)",
+    )
+
+    # ------------------------------------------------------------------ validate
+    subparsers.add_parser("validate", help="Run system integrity validation checks")
+
+    # ------------------------------------------------------------------ build
+    build_p = subparsers.add_parser("build", help="Build and manifest utilities")
+    build_sub = build_p.add_subparsers(dest="build_cmd", metavar="<build-command>")
+    build_manifest = build_sub.add_parser(
+        "manifest", help="Generate a system manifest"
+    )
+    build_manifest.add_argument(
+        "--output", "-o", default=None, metavar="FILE",
+        help="Write manifest JSON to FILE instead of printing summary",
+    )
+    build_diff = build_sub.add_parser(
+        "diff", help="Diff two manifest files"
+    )
+    build_diff.add_argument("old", help="Path to older manifest JSON")
+    build_diff.add_argument("new", help="Path to newer manifest JSON")
+    build_sub.add_parser("validate", help="Run system integrity validation")
+
+    # ------------------------------------------------------------------ diag
+    subparsers.add_parser("diag", help="Run system diagnostics")
+
+    # ------------------------------------------------------------------ repair
+    repair_p = subparsers.add_parser("repair", help="Repair the AURA OS runtime")
+    repair_sub = repair_p.add_subparsers(dest="repair_cmd", metavar="<repair-command>")
+    repair_sub.add_parser("all", help="Run all repair operations (default)")
+    repair_sub.add_parser("dirs", help="Recreate missing directories")
+    repair_sub.add_parser("config", help="Restore or validate configuration")
+    repair_sub.add_parser("logs", help="Rotate and clean up log files")
+    repair_sub.add_parser("state", help="Purge stale runtime state files")
+
+    # ------------------------------------------------------------------ cloud
+    cloud_p = subparsers.add_parser("cloud", help="Cloud and remote node management")
+    cloud_sub = cloud_p.add_subparsers(dest="cloud_cmd", metavar="<cloud-command>")
+    cloud_ping = cloud_sub.add_parser("ping", help="Ping a remote HTTP endpoint")
+    cloud_ping.add_argument("url", help="URL to ping")
+    cloud_get = cloud_sub.add_parser("get", help="HTTP GET a URL")
+    cloud_get.add_argument("url", help="URL to GET")
+    cloud_sub.add_parser("nodes", help="List registered remote nodes")
+    cloud_sub.add_parser("status", help="Show cloud layer status")
+
     return parser

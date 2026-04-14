@@ -35,6 +35,13 @@ def _build_router():
     from aura_os.engine.commands.health_cmd import HealthCommand
     from aura_os.engine.commands.monitor_cmd import MonitorCommand
     from aura_os.engine.commands.web_cmd import WebCommand
+    from aura_os.command_center.center import CenterCommand
+    from aura_os.shell.repl import ShellCommand
+    from aura_os.build.validator import ValidateCommand
+    from aura_os.build.manifest import BuildCommand
+    from aura_os.maintenance.diagnostics import DiagnosticsCommand
+    from aura_os.maintenance.repair import RepairCommand
+    from aura_os.cloud.client import CloudCommand
 
     router = CommandRouter()
     router.register("run", RunCommand)
@@ -58,6 +65,13 @@ def _build_router():
     router.register("health", HealthCommand)
     router.register("monitor", MonitorCommand)
     router.register("web", WebCommand)
+    router.register("center", CenterCommand)
+    router.register("shell", ShellCommand)
+    router.register("validate", ValidateCommand)
+    router.register("build", BuildCommand)
+    router.register("diag", DiagnosticsCommand)
+    router.register("repair", RepairCommand)
+    router.register("cloud", CloudCommand)
     return router
 
 
@@ -160,9 +174,7 @@ def _run_shell(eal, script_file=None):
             continue
 
         # Handle background execution (&)
-        background = False
         if line.rstrip().endswith("&"):
-            background = True
             line = line.rstrip()[:-1].rstrip()
 
         # Handle pipes
@@ -817,11 +829,6 @@ def main(argv=None):
     # Initialise system logger
     syslog = Syslog()
     syslog.info("kern", "AURA OS started")
-
-    if args.command == "shell":
-        script = getattr(args, "script", None)
-        result = _run_shell(eal, script_file=script)
-        return result if result is not None else 0
 
     if args.command is None:
         parser.print_help()

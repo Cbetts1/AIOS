@@ -8,7 +8,7 @@ fly from real host data.
 import os
 import platform
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 from aura_os import __version__
 from aura_os.kernel.memory import MemoryTracker
@@ -157,7 +157,7 @@ class ProcFS:
         rss_kb = mem.get("rss", 0) // 1024
         pid = mem.get("pid", os.getpid())
         lines = [
-            f"Name:\taura",
+            "Name:\taura",
             f"Pid:\t{pid}",
             f"PPid:\t{os.getppid()}",
             f"VmRSS:\t{rss_kb} kB",

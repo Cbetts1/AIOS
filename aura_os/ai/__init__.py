@@ -2,5 +2,7 @@
 
 from .model_manager import ModelManager
 from .inference import LocalInference
+from .aura import AuraPersona
+from .session import AuraSession
 
-__all__ = ["ModelManager", "LocalInference"]
+__all__ = ["ModelManager", "LocalInference", "AuraPersona", "AuraSession"]

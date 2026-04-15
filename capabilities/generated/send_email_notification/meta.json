@@ -1,0 +1,22 @@
+{
+  "id": "send_email_notification",
+  "name": "send_email_notification",
+  "repo": "Cbetts1/AIOS",
+  "description": "Auto-generated capability for: send email notification",
+  "type": "generated",
+  "inputs": [
+    "intent"
+  ],
+  "outputs": [
+    "result"
+  ],
+  "runtime": "python",
+  "dependencies": [],
+  "ai_routable": true,
+  "generatable": true,
+  "status": "active",
+  "entrypoint": "capabilities/generated/send_email_notification/generated.py",
+  "version": "0.1.0",
+  "generated_at": "2026-04-15T04:13:34.206922+00:00",
+  "original_intent": "send email notification"
+}

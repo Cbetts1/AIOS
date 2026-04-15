@@ -1,0 +1,22 @@
+{
+  "id": "analyze_sentiment_of_text_messages",
+  "name": "analyze_sentiment_of_text_messages",
+  "repo": "Cbetts1/AIOS",
+  "description": "Auto-generated capability for: analyze sentiment of text messages",
+  "type": "generated",
+  "inputs": [
+    "intent"
+  ],
+  "outputs": [
+    "result"
+  ],
+  "runtime": "python",
+  "dependencies": [],
+  "ai_routable": true,
+  "generatable": true,
+  "status": "active",
+  "entrypoint": "capabilities/generated/analyze_sentiment_of_text_messages/generated.py",
+  "version": "0.1.0",
+  "generated_at": "2026-04-15T04:12:42.626967+00:00",
+  "original_intent": "analyze sentiment of text messages"
+}

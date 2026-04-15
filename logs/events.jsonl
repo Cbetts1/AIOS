@@ -1,0 +1,5 @@
+{"timestamp": "2026-04-15T04:12:42.627231+00:00", "event": "capability_matched", "data": {"intent": "list files", "capability_id": "list_files"}}
+{"timestamp": "2026-04-15T04:12:42.627303+00:00", "event": "capability_generated", "data": {"intent": "analyze sentiment", "capability_id": "analyze_sentiment_of_text_messages"}}
+{"timestamp": "2026-04-15T04:13:34.205381+00:00", "event": "capability_matched", "data": {"intent": "list files", "capability_id": "list_files"}}
+{"timestamp": "2026-04-15T04:13:34.205894+00:00", "event": "capability_matched", "data": {"intent": "compress video file", "capability_id": "read_file"}}
+{"timestamp": "2026-04-15T04:13:34.207092+00:00", "event": "capability_generated", "data": {"intent": "send email notification", "capability_id": "send_email_notification"}}

@@ -1,0 +1,22 @@
+{
+  "id": "translate_english_to_french",
+  "name": "translate_english_to_french",
+  "repo": "Cbetts1/AIOS",
+  "description": "Auto-generated capability for: translate english to french",
+  "type": "generated",
+  "inputs": [
+    "intent"
+  ],
+  "outputs": [
+    "result"
+  ],
+  "runtime": "python",
+  "dependencies": [],
+  "ai_routable": true,
+  "generatable": true,
+  "status": "active",
+  "entrypoint": "capabilities/generated/translate_english_to_french/generated.py",
+  "version": "0.1.0",
+  "generated_at": "2026-04-15T04:13:17.386514+00:00",
+  "original_intent": "translate english to french"
+}
